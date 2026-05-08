@@ -1,39 +1,56 @@
 import React, { useState, useEffect } from 'react';
-import { Users, UserPlus, Activity, LogOut, Copy, Check, Eye, Settings } from 'lucide-react';
+import { Users, UserPlus, Activity, LogOut, Copy, Check, Eye, Settings, ToggleLeft, ToggleRight, CheckCircle } from 'lucide-react';
+
+function genClientCode(existing) {
+  const nums = existing.map(c => parseInt((c.clientCode || 'AZL-0000').split('-')[1] || '0'));
+  const next = (Math.max(0, ...nums) + 1).toString().padStart(4, '0');
+  return `AZL-${next}`;
+}
 
 export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
   const [activeTab, setActiveTab] = useState('clients');
   const [copied, setCopied] = useState(false);
   const [slugPreview, setSlugPreview] = useState('');
+  const [toast, setToast] = useState(null);
+
+  const showToast = (msg, type = 'success') => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3000);
+  };
   
   const [clients, setClients] = useState([
-    { id: 'acme', name: 'Acme Corporation', initials: 'AC', industry: 'SaaS / Technology', plan: 'Pro', minsTotal: 2000, minsUsed: 1284, calls: 5, balance: 285, status: 'Active', slug: 'acme-corporation', whitelabel: 'Acme Corporation' },
-    { id: 'smile', name: 'SmilePlus Dental', initials: 'SP', industry: 'Dental / Healthcare', plan: 'Starter', minsTotal: 500, minsUsed: 312, calls: 2, balance: 128, status: 'Active', slug: 'smileplus-dental', whitelabel: 'SmilePlus Dental' },
-    { id: 'propmax', name: 'PropMax Real Estate', initials: 'PM', industry: 'Real Estate', plan: 'Business', minsTotal: 5000, minsUsed: 2847, calls: 2, balance: 540, status: 'Active', slug: 'propmax-real-estate', whitelabel: 'PropMax Real Estate' },
-    { id: 'demo', name: 'Demo', initials: 'DE', industry: 'Real Estate', plan: 'Pro', minsTotal: 2000, minsUsed: 0, calls: 0, balance: 0, status: 'Active', slug: 'demo', whitelabel: 'Azlon AI' }
+    { id: 'acme', name: 'Acme Corporation', initials: 'AC', industry: 'SaaS / Technology', plan: 'Pro', minsTotal: 2000, minsUsed: 0, calls: 0, balance: 0, status: 'Active', slug: 'acme-corporation', whitelabel: 'Acme Corporation', clientCode: 'AZL-0001', agentEnabled: true },
+    { id: 'smile', name: 'SmilePlus Dental', initials: 'SP', industry: 'Dental / Healthcare', plan: 'Starter', minsTotal: 500, minsUsed: 0, calls: 0, balance: 0, status: 'Active', slug: 'smileplus-dental', whitelabel: 'SmilePlus Dental', clientCode: 'AZL-0002', agentEnabled: true },
+    { id: 'propmax', name: 'PropMax Real Estate', initials: 'PM', industry: 'Real Estate', plan: 'Business', minsTotal: 5000, minsUsed: 0, calls: 0, balance: 0, status: 'Active', slug: 'propmax-real-estate', whitelabel: 'PropMax Real Estate', clientCode: 'AZL-0003', agentEnabled: true },
+    { id: 'demo', name: 'Demo', initials: 'DE', industry: 'Real Estate', plan: 'Pro', minsTotal: 2000, minsUsed: 0, calls: 0, balance: 0, status: 'Active', slug: 'demo', whitelabel: 'Azlon AI', clientCode: 'AZL-0004', agentEnabled: true }
   ]);
 
   const [newClient, setNewClient] = useState({ name: '', industry: 'SaaS / Technology', adminName: '', email: '', password: '', phone: '', whitelabel: '', plan: 'Starter (500 mins)', customPlan: '' });
 
   const fetchPlatformStats = async () => {
-    try {
-      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'https://saas-backend.xqnsvk.easypanel.host'}/api/reports`);
-      const data = await res.json();
-      if (data.success) {
-        // For prototype, we'll map the global stats to our demo clients
-        setClients(prev => prev.map(c => {
-          if (c.id === 'demo' || c.id === 'acme') {
-            return {
-              ...c,
-              calls: data.metrics.totalCalls,
-              minsUsed: data.metrics.totalMinutes,
-              balance: data.metrics.bookedAppointments * 10 // Dummy balance logic
-            };
-          }
-          return c;
-        }));
+    // Stats are per-client. Until each client has their own Twilio/backend,
+    // we show 0 for all clients to avoid misleading shared data.
+    // When a client enters their Twilio credentials, their calls/mins will populate.
+  };
+
+  const copyClientUrl = (slug) => {
+    const url = `https://livekit-ai-azlon-olivia-va-dashboard.xqnsvk.easypanel.host/?org=${slug}`;
+    navigator.clipboard.writeText(url).then(() => {
+      showToast(`URL copied to clipboard!`);
+    }).catch(() => {
+      showToast('Copy failed. Please copy manually.', 'error');
+    });
+  };
+
+  const toggleAgent = (clientId) => {
+    setClients(prev => prev.map(c => {
+      if (c.id === clientId) {
+        const next = !c.agentEnabled;
+        showToast(`AI Agent ${next ? 'ENABLED' : 'DISABLED'} for ${c.name}`);
+        return { ...c, agentEnabled: next };
       }
-    } catch (e) { console.error("Stats fetch failed", e); }
+      return c;
+    }));
   };
 
   useEffect(() => {
@@ -58,23 +75,34 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
   };
 
   const handleCreateClient = () => {
-    const newId = newClient.name.toLowerCase().replace(/[^a-z0-9]+/g, '');
-    const clientData = {
-      id: newId,
-      name: newClient.name || 'New Client',
-      initials: newClient.name ? newClient.name.substring(0, 2).toUpperCase() : 'NC',
-      industry: newClient.industry,
-      plan: newClient.plan === 'Custom' ? newClient.customPlan : newClient.plan.split(' ')[0],
-      minsTotal: 500,
-      minsUsed: 0,
-      calls: 0,
-      balance: 0,
-      status: 'Active',
-      slug: slugPreview.replace('https://azlonai.com/login?org=', ''),
-      whitelabel: newClient.whitelabel || newClient.name || 'Azlon AI'
-    };
-    setClients(prev => [...prev, clientData]);
-    onViewClient({ id: clientData.id, name: clientData.name, whitelabel: clientData.whitelabel });
+    const newId = newClient.name.toLowerCase().replace(/[^a-z0-9]+/g, '') + '_' + Date.now();
+    const slug = newClient.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
+    setClients(prev => {
+      const clientCode = genClientCode(prev);
+      const clientData = {
+        id: newId,
+        name: newClient.name || 'New Client',
+        initials: newClient.name ? newClient.name.substring(0, 2).toUpperCase() : 'NC',
+        industry: newClient.industry,
+        plan: newClient.plan === 'Custom' ? newClient.customPlan : newClient.plan.split(' ')[0],
+        minsTotal: 500,
+        minsUsed: 0,
+        calls: 0,
+        balance: 0,
+        status: 'Active',
+        slug: slug,
+        whitelabel: newClient.whitelabel || newClient.name || 'Azlon AI',
+        clientCode,
+        agentEnabled: true,
+        email: newClient.email,
+        phone: newClient.phone
+      };
+      setTimeout(() => {
+        showToast(`Client "${clientData.name}" created! Code: ${clientCode}`);
+      }, 100);
+      return [...prev, clientData];
+    });
+    setActiveTab('clients');
   };
 
   const [editingClient, setEditingClient] = useState(null);
@@ -82,6 +110,7 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
   const handleUpdateClient = (updatedClient) => {
     setClients(prev => prev.map(c => c.id === updatedClient.id ? { ...c, ...updatedClient } : c));
     setEditingClient(null);
+    showToast(`Changes saved for "${updatedClient.name}"!`);
   };
 
   const copySlug = () => {
@@ -99,7 +128,16 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
   ];
 
   return (
-    <div className="flex flex-col min-h-screen bg-[#f5f7fb] text-[#0f172a] font-sans">
+    <div className="flex flex-col h-screen bg-[#f5f7fb] text-[#0f172a] font-sans overflow-hidden">
+      {/* TOAST */}
+      {toast && (
+        <div className={`fixed top-5 right-5 z-[9999] flex items-center gap-3 px-5 py-3 rounded-2xl shadow-2xl text-white text-sm font-semibold transition-all ${
+          toast.type === 'error' ? 'bg-red-500' : 'bg-emerald-500'
+        }`}>
+          <CheckCircle size={16} />
+          {toast.msg}
+        </div>
+      )}
       {/* Admin Topbar */}
       <div className="h-14 bg-white border-b border-[#e4e9f2] flex items-center px-7 gap-4">
         <div className="flex items-center gap-2 text-[15px] font-bold tracking-tight">
@@ -127,9 +165,9 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
         </div>
       </div>
 
-      <div className="flex flex-1">
+      <div className="flex flex-1 overflow-hidden">
         {/* Admin Sidebar */}
-        <div className="w-[220px] bg-white border-r border-[#e4e9f2] p-4">
+        <div className="w-[220px] bg-white border-r border-[#e4e9f2] p-4 flex-shrink-0">
           {navItems.map(item => {
             const Icon = item.icon;
             const active = activeTab === item.id;
@@ -151,7 +189,7 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
         </div>
 
         {/* Admin Content */}
-        <div className="flex-1 p-7 overflow-y-auto">
+        <div className="flex-1 p-7 overflow-y-auto h-full">
           
           {/* ALL CLIENTS VIEW */}
           {activeTab === 'clients' && (
@@ -165,7 +203,7 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
                   + Add new client
                 </button>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pb-6">
                 {clients.map(client => (
                   <div key={client.id} className="bg-white border border-[#e4e9f2] rounded-[14px] p-5 shadow-[0_1px_3px_rgba(15,23,42,0.06)] hover:border-[#bfcfff] hover:shadow-[0_4px_16px_rgba(15,23,42,0.1)] transition-all">
                     <div className="flex items-center justify-between mb-3.5">
@@ -178,9 +216,15 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
                           <div className="text-[11px] text-[#94a3b8] mt-0.5">{client.plan} · {client.industry}</div>
                         </div>
                       </div>
-                      <span className="bg-[#ecfdf5] text-[#059669] px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-[#059669]"></span> Active
-                      </span>
+                      <div className="flex flex-col items-end gap-1">
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide flex items-center gap-1 ${
+                          client.agentEnabled ? 'bg-[#ecfdf5] text-[#059669]' : 'bg-red-50 text-red-500'
+                        }`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${client.agentEnabled ? 'bg-[#059669]' : 'bg-red-400'}`}></span>
+                          {client.agentEnabled ? 'AI Active' : 'AI Off'}
+                        </span>
+                        <span className="font-mono text-[9px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">{client.clientCode}</span>
+                      </div>
                     </div>
                     
                     <div className="grid grid-cols-3 gap-2 mb-4">
@@ -198,19 +242,22 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
                       </div>
                     </div>
 
-                    <div className="mb-4">
-                      <label className="text-[10px] font-semibold text-[#94a3b8] uppercase tracking-[0.5px] mb-1.5 block">Client's unique login URL</label>
+                    <div className="mb-3">
+                      <label className="text-[10px] font-semibold text-[#94a3b8] uppercase tracking-[0.5px] mb-1.5 block">Client login URL</label>
                       <div className="bg-[#eff4ff] border border-[#bfcfff] rounded-lg p-2 flex items-center gap-2">
                         <span className="font-mono text-[10px] text-[#1e40af] flex-1 truncate">
-                          https://azlonai.com/login?org={client.slug}
+                          {`https://livekit-ai-azlon-olivia-va-dashboard.xqnsvk.easypanel.host/?org=${client.slug}`}
                         </span>
-                        <button className="px-2 py-1 bg-blue-600 text-white rounded text-[10px] font-semibold hover:bg-[#1e40af]">
-                          Copy
+                        <button 
+                          onClick={() => copyClientUrl(client.slug)}
+                          className="px-2 py-1 bg-blue-600 text-white rounded text-[10px] font-semibold hover:bg-[#1e40af] flex items-center gap-1"
+                        >
+                          <Copy size={10} /> Copy
                         </button>
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-2 gap-2 mb-2">
                       <button 
                         onClick={() => setEditingClient(client)}
                         className="py-1.5 border border-[#e4e9f2] bg-white hover:bg-[#f0f3f9] rounded-lg text-xs font-semibold text-[#475569] transition-all"
@@ -218,18 +265,23 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
                         Settings
                       </button>
                       <button 
-                        onClick={() => onViewClient({ id: client.id, name: client.name, whitelabel: client.whitelabel })}
-                        className="py-1.5 border border-[#e4e9f2] bg-white hover:bg-[#f0f3f9] rounded-lg text-xs font-semibold text-blue-600 transition-all"
-                      >
-                        View dashboard
-                      </button>
-                      <button 
-                        onClick={() => onViewClient({ id: client.id, name: client.name, whitelabel: client.whitelabel })}
+                        onClick={() => onViewClient({ id: client.id, name: client.name, whitelabel: client.whitelabel, agentEnabled: client.agentEnabled })}
                         className="py-1.5 border border-[#e4e9f2] bg-[#f0f3f9] hover:bg-[#e4e9f2] rounded-lg text-xs font-semibold text-blue-600 transition-all flex items-center justify-center gap-1"
                       >
                         <Eye size={12} /> Login as
                       </button>
                     </div>
+                    <button 
+                      onClick={() => toggleAgent(client.id)}
+                      className={`w-full py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all border ${
+                        client.agentEnabled 
+                          ? 'bg-red-50 text-red-500 border-red-100 hover:bg-red-100' 
+                          : 'bg-emerald-50 text-emerald-600 border-emerald-100 hover:bg-emerald-100'
+                      }`}
+                    >
+                      {client.agentEnabled ? <ToggleRight size={14}/> : <ToggleLeft size={14}/>}
+                      {client.agentEnabled ? 'Disable AI Agent' : 'Enable AI Agent'}
+                    </button>
                   </div>
                 ))}
               </div>
