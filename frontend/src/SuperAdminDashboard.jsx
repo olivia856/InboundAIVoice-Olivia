@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { Users, UserPlus, Activity, LogOut, Copy, Check, Eye } from 'lucide-react';
+import { Users, UserPlus, Activity, LogOut, Copy, Check, Eye, Settings } from 'lucide-react';
 
-export default function SuperAdminDashboard({ user, onLogout }) {
+export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
   const [activeTab, setActiveTab] = useState('clients');
   const [copied, setCopied] = useState(false);
   const [slugPreview, setSlugPreview] = useState('');
@@ -22,6 +22,7 @@ export default function SuperAdminDashboard({ user, onLogout }) {
     { id: 'clients', label: 'All Clients', icon: Users },
     { id: 'add-client', label: 'Add Client', icon: UserPlus },
     { id: 'platform-stats', label: 'Platform Stats', icon: Activity },
+    { id: 'settings', label: 'Platform Settings', icon: Settings },
   ];
 
   return (
@@ -118,10 +119,16 @@ export default function SuperAdminDashboard({ user, onLogout }) {
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    <button className="flex-1 py-1.5 border border-[#e4e9f2] bg-white hover:bg-[#f0f3f9] rounded-lg text-xs font-semibold text-[#475569] transition-all">
-                      Manage
+                    <button 
+                      onClick={() => onViewClient({ id: 'acme', name: 'Acme Corporation' })}
+                      className="flex-1 py-1.5 border border-[#e4e9f2] bg-white hover:bg-[#f0f3f9] rounded-lg text-xs font-semibold text-[#475569] transition-all"
+                    >
+                      View dashboard
                     </button>
-                    <button className="flex-1 py-1.5 border border-[#e4e9f2] bg-[#f0f3f9] hover:bg-[#e4e9f2] rounded-lg text-xs font-semibold text-blue-600 transition-all flex items-center justify-center gap-1">
+                    <button 
+                      onClick={() => onViewClient({ id: 'acme', name: 'Acme Corporation' })}
+                      className="flex-1 py-1.5 border border-[#e4e9f2] bg-[#f0f3f9] hover:bg-[#e4e9f2] rounded-lg text-xs font-semibold text-blue-600 transition-all flex items-center justify-center gap-1"
+                    >
                       <Eye size={12} /> Login as
                     </button>
                   </div>
@@ -286,6 +293,78 @@ export default function SuperAdminDashboard({ user, onLogout }) {
                     </tbody>
                   </table>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* PLATFORM SETTINGS VIEW */}
+          {activeTab === 'settings' && (
+            <div>
+              <div className="flex items-center justify-between mb-5">
+                <h2 className="text-lg font-bold tracking-tight">Platform Engine Settings</h2>
+              </div>
+              <p className="text-[13px] text-[#475569] mb-6 max-w-2xl">
+                These are your master credentials. The credentials entered here will power all the features inside your clients' dashboards. If a client creates an agent, it will use these API keys behind the scenes.
+              </p>
+              
+              <div className="space-y-4 max-w-[600px]">
+                {/* Supabase */}
+                <div className="bg-white border border-[#e4e9f2] rounded-[14px] p-5 shadow-[0_1px_3px_rgba(15,23,42,0.06)]">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="w-8 h-8 rounded bg-emerald-100 flex items-center justify-center">
+                      <img src="https://supabase.com/favicon/favicon-32x32.png" alt="Supabase" className="w-4 h-4 opacity-70 grayscale" onError={(e) => e.target.style.display='none'} />
+                    </div>
+                    <h3 className="text-sm font-bold">Supabase (Database)</h3>
+                  </div>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-[11px] font-semibold text-[#475569] uppercase tracking-[0.4px] mb-1.5 block">Project URL</label>
+                      <input type="text" className="w-full bg-[#f0f3f9] border border-[#e4e9f2] rounded-[10px] px-3 py-2.5 text-[13px] outline-none font-mono" placeholder="https://xxxx.supabase.co" defaultValue="https://qhqmljwexivhvxzfklum.supabase.co" />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-semibold text-[#475569] uppercase tracking-[0.4px] mb-1.5 block">Anon / Public Key</label>
+                      <input type="password" className="w-full bg-[#f0f3f9] border border-[#e4e9f2] rounded-[10px] px-3 py-2.5 text-[13px] outline-none font-mono" placeholder="eyJ..." defaultValue="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Ultravox */}
+                <div className="bg-white border border-[#e4e9f2] rounded-[14px] p-5 shadow-[0_1px_3px_rgba(15,23,42,0.06)]">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="w-8 h-8 rounded bg-purple-100 flex items-center justify-center">
+                      <span className="text-purple-600 font-bold font-serif">U</span>
+                    </div>
+                    <h3 className="text-sm font-bold">Ultravox (AI Voice)</h3>
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-semibold text-[#475569] uppercase tracking-[0.4px] mb-1.5 block">API Key</label>
+                    <input type="password" className="w-full bg-[#f0f3f9] border border-[#e4e9f2] rounded-[10px] px-3 py-2.5 text-[13px] outline-none font-mono" placeholder="OuX6..." />
+                  </div>
+                </div>
+
+                {/* Twilio */}
+                <div className="bg-white border border-[#e4e9f2] rounded-[14px] p-5 shadow-[0_1px_3px_rgba(15,23,42,0.06)]">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="w-8 h-8 rounded bg-red-100 flex items-center justify-center">
+                      <span className="text-red-600 font-bold font-serif">T</span>
+                    </div>
+                    <h3 className="text-sm font-bold">Twilio (Telephony)</h3>
+                  </div>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-[11px] font-semibold text-[#475569] uppercase tracking-[0.4px] mb-1.5 block">Account SID</label>
+                      <input type="text" className="w-full bg-[#f0f3f9] border border-[#e4e9f2] rounded-[10px] px-3 py-2.5 text-[13px] outline-none font-mono" placeholder="AC..." />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-semibold text-[#475569] uppercase tracking-[0.4px] mb-1.5 block">Auth Token</label>
+                      <input type="password" className="w-full bg-[#f0f3f9] border border-[#e4e9f2] rounded-[10px] px-3 py-2.5 text-[13px] outline-none font-mono" placeholder="••••••••••••" />
+                    </div>
+                  </div>
+                </div>
+
+                <button className="bg-blue-600 hover:bg-[#1e40af] text-white px-4 py-2.5 rounded-[10px] text-[13px] font-semibold transition-all w-full mt-2">
+                  Save Platform Settings
+                </button>
               </div>
             </div>
           )}
