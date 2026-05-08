@@ -41,6 +41,13 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
     onViewClient({ id: clientData.id, name: clientData.name, whitelabel: clientData.whitelabel });
   };
 
+  const [editingClient, setEditingClient] = useState(null);
+
+  const handleUpdateClient = (updatedClient) => {
+    setClients(prev => prev.map(c => c.id === updatedClient.id ? { ...c, ...updatedClient } : c));
+    setEditingClient(null);
+  };
+
   const copySlug = () => {
     if (!slugPreview) return;
     navigator.clipboard.writeText(slugPreview);
@@ -168,7 +175,10 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
                     </div>
 
                     <div className="grid grid-cols-3 gap-2">
-                      <button className="py-1.5 border border-[#e4e9f2] bg-white hover:bg-[#f0f3f9] rounded-lg text-xs font-semibold text-[#475569] transition-all">
+                      <button 
+                        onClick={() => setEditingClient(client)}
+                        className="py-1.5 border border-[#e4e9f2] bg-white hover:bg-[#f0f3f9] rounded-lg text-xs font-semibold text-[#475569] transition-all"
+                      >
                         Settings
                       </button>
                       <button 
@@ -489,6 +499,106 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
           )}
 
         </div>
+
+        {/* CLIENT SETTINGS MODAL */}
+        {editingClient && (
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[550px] overflow-hidden border border-[#e4e9f2]">
+              <div className="px-6 py-4 border-b border-[#e4e9f2] flex items-center justify-between bg-[#f8fafc]">
+                <h3 className="font-bold text-slate-800">Edit Client: {editingClient.name}</h3>
+                <button onClick={() => setEditingClient(null)} className="text-slate-400 hover:text-slate-600">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+              </div>
+              <div className="p-6 max-h-[70vh] overflow-y-auto">
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 block">Company Name</label>
+                    <input 
+                      type="text" 
+                      defaultValue={editingClient.name}
+                      onChange={(e) => setEditingClient({...editingClient, name: e.target.value})}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-[13px] outline-none focus:border-blue-500 transition-all" 
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 block">Industry</label>
+                    <select 
+                      defaultValue={editingClient.industry}
+                      onChange={(e) => setEditingClient({...editingClient, industry: e.target.value})}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-[13px] outline-none focus:border-blue-500 transition-all"
+                    >
+                      <option>SaaS / Technology</option>
+                      <option>Dental / Healthcare</option>
+                      <option>Real Estate</option>
+                      <option>Ecommerce / Retail</option>
+                      <option>Legal / Finance</option>
+                      <option>Restaurant / Food</option>
+                      <option>Other</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 block">Plan</label>
+                    <select 
+                      defaultValue={editingClient.plan}
+                      onChange={(e) => setEditingClient({...editingClient, plan: e.target.value})}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-[13px] outline-none focus:border-blue-500 transition-all"
+                    >
+                      <option>Starter</option>
+                      <option>Pro</option>
+                      <option>Business</option>
+                      <option>Enterprise</option>
+                      <option>Custom</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 block">Phone Number</label>
+                    <input 
+                      type="text" 
+                      defaultValue={editingClient.phone}
+                      onChange={(e) => setEditingClient({...editingClient, phone: e.target.value})}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-[13px] outline-none focus:border-blue-500 transition-all" 
+                    />
+                  </div>
+                </div>
+
+                <div className="mb-4">
+                  <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 block">Whitelabel (Logo Name)</label>
+                  <input 
+                    type="text" 
+                    defaultValue={editingClient.whitelabel}
+                    onChange={(e) => setEditingClient({...editingClient, whitelabel: e.target.value})}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-[13px] outline-none focus:border-blue-500 transition-all" 
+                  />
+                </div>
+
+                <div className="bg-amber-50 border border-amber-200/50 rounded-xl p-4 mb-2">
+                   <div className="flex items-center gap-2 text-amber-800 font-bold text-[12px] mb-1">
+                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                     Admin Security
+                   </div>
+                   <div className="grid grid-cols-2 gap-3">
+                     <input type="text" placeholder="Admin Email" className="bg-white border border-amber-200 rounded-lg px-3 py-2 text-[12px] outline-none" />
+                     <input type="password" placeholder="New Password" className="bg-white border border-amber-200 rounded-lg px-3 py-2 text-[12px] outline-none" />
+                   </div>
+                </div>
+              </div>
+              <div className="px-6 py-4 bg-slate-50 border-t border-[#e4e9f2] flex items-center justify-end gap-3">
+                <button onClick={() => setEditingClient(null)} className="px-4 py-2 text-slate-600 font-semibold text-[13px]">Cancel</button>
+                <button 
+                  onClick={() => handleUpdateClient(editingClient)}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-xl text-[13px] font-bold shadow-lg shadow-blue-500/20 transition-all"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
   );
