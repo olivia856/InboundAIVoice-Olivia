@@ -5,6 +5,41 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
   const [activeTab, setActiveTab] = useState('clients');
   const [copied, setCopied] = useState(false);
   const [slugPreview, setSlugPreview] = useState('');
+  
+  const [clients, setClients] = useState([
+    { id: 'acme', name: 'Acme Corporation', initials: 'AC', industry: 'SaaS / Technology', plan: 'Pro', minsTotal: 2000, minsUsed: 1284, calls: 5, balance: 285, status: 'Active', slug: 'acme-corporation', whitelabel: 'Acme Corporation' },
+    { id: 'smile', name: 'SmilePlus Dental', initials: 'SP', industry: 'Dental / Healthcare', plan: 'Starter', minsTotal: 500, minsUsed: 312, calls: 2, balance: 128, status: 'Active', slug: 'smileplus-dental', whitelabel: 'SmilePlus Dental' },
+    { id: 'propmax', name: 'PropMax Real Estate', initials: 'PM', industry: 'Real Estate', plan: 'Business', minsTotal: 5000, minsUsed: 2847, calls: 2, balance: 540, status: 'Active', slug: 'propmax-real-estate', whitelabel: 'PropMax Real Estate' },
+    { id: 'demo', name: 'Demo', initials: 'DE', industry: 'Real Estate', plan: 'Pro', minsTotal: 2000, minsUsed: 0, calls: 0, balance: 0, status: 'Active', slug: 'demo', whitelabel: 'Azlon AI' }
+  ]);
+
+  const [newClient, setNewClient] = useState({ name: '', industry: 'SaaS / Technology', adminName: '', email: '', password: '', phone: '', whitelabel: '', plan: 'Starter (500 mins)', customPlan: '' });
+
+  const handleSlugPreview = (name) => {
+    setNewClient(prev => ({ ...prev, name }));
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
+    setSlugPreview(slug ? `https://azlonai.com/login?org=${slug}` : '');
+  };
+
+  const handleCreateClient = () => {
+    const newId = newClient.name.toLowerCase().replace(/[^a-z0-9]+/g, '');
+    const clientData = {
+      id: newId,
+      name: newClient.name || 'New Client',
+      initials: newClient.name ? newClient.name.substring(0, 2).toUpperCase() : 'NC',
+      industry: newClient.industry,
+      plan: newClient.plan === 'Custom' ? newClient.customPlan : newClient.plan.split(' ')[0],
+      minsTotal: 500,
+      minsUsed: 0,
+      calls: 0,
+      balance: 0,
+      status: 'Active',
+      slug: slugPreview.replace('https://azlonai.com/login?org=', ''),
+      whitelabel: newClient.whitelabel || newClient.name || 'Azlon AI'
+    };
+    setClients(prev => [...prev, clientData]);
+    onViewClient({ id: clientData.id, name: clientData.name, whitelabel: clientData.whitelabel });
+  };
 
   const handleSlugPreview = (name) => {
     const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
@@ -92,47 +127,70 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
                   + Add new client
                 </button>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {/* Dummy Client Card */}
-                <div className="bg-white border border-[#e4e9f2] rounded-[14px] p-5 shadow-[0_1px_3px_rgba(15,23,42,0.06)] hover:border-[#bfcfff] hover:shadow-[0_4px_16px_rgba(15,23,42,0.1)] transition-all">
-                  <div className="flex items-center gap-3 mb-3.5">
-                    <div className="w-11 h-11 rounded-xl bg-purple-600 text-white flex items-center justify-center text-[15px] font-bold">
-                      AC
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {clients.map(client => (
+                  <div key={client.id} className="bg-white border border-[#e4e9f2] rounded-[14px] p-5 shadow-[0_1px_3px_rgba(15,23,42,0.06)] hover:border-[#bfcfff] hover:shadow-[0_4px_16px_rgba(15,23,42,0.1)] transition-all">
+                    <div className="flex items-center justify-between mb-3.5">
+                      <div className="flex items-center gap-3">
+                        <div className="w-11 h-11 rounded-xl bg-blue-600 text-white flex items-center justify-center text-[15px] font-bold">
+                          {client.initials}
+                        </div>
+                        <div>
+                          <div className="text-[15px] font-bold tracking-tight">{client.name}</div>
+                          <div className="text-[11px] text-[#94a3b8] mt-0.5">{client.plan} · {client.industry}</div>
+                        </div>
+                      </div>
+                      <span className="bg-[#ecfdf5] text-[#059669] px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#059669]"></span> Active
+                      </span>
                     </div>
-                    <div>
-                      <div className="text-[15px] font-bold tracking-tight">Acme Corporation</div>
-                      <div className="text-[11px] text-[#94a3b8] mt-0.5">Business Plan</div>
+                    
+                    <div className="grid grid-cols-3 gap-2 mb-4">
+                      <div className="bg-[#f0f3f9] rounded-lg p-2 text-center">
+                        <div className="text-[15px] font-bold">{client.calls}</div>
+                        <div className="text-[10px] text-[#94a3b8] mt-[1px]">Calls</div>
+                      </div>
+                      <div className="bg-[#f0f3f9] rounded-lg p-2 text-center">
+                        <div className="text-[15px] font-bold">{client.minsUsed}</div>
+                        <div className="text-[10px] text-[#94a3b8] mt-[1px]">Mins</div>
+                      </div>
+                      <div className="bg-[#f0f3f9] rounded-lg p-2 text-center">
+                        <div className="text-[15px] font-bold">${client.balance}</div>
+                        <div className="text-[10px] text-[#94a3b8] mt-[1px]">Balance</div>
+                      </div>
+                    </div>
+
+                    <div className="mb-4">
+                      <label className="text-[10px] font-semibold text-[#94a3b8] uppercase tracking-[0.5px] mb-1.5 block">Client's unique login URL</label>
+                      <div className="bg-[#eff4ff] border border-[#bfcfff] rounded-lg p-2 flex items-center gap-2">
+                        <span className="font-mono text-[10px] text-[#1e40af] flex-1 truncate">
+                          https://azlonai.com/login?org={client.slug}
+                        </span>
+                        <button className="px-2 py-1 bg-blue-600 text-white rounded text-[10px] font-semibold hover:bg-[#1e40af]">
+                          Copy
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2">
+                      <button className="py-1.5 border border-[#e4e9f2] bg-white hover:bg-[#f0f3f9] rounded-lg text-xs font-semibold text-[#475569] transition-all">
+                        Settings
+                      </button>
+                      <button 
+                        onClick={() => onViewClient({ id: client.id, name: client.name, whitelabel: client.whitelabel })}
+                        className="py-1.5 border border-[#e4e9f2] bg-white hover:bg-[#f0f3f9] rounded-lg text-xs font-semibold text-blue-600 transition-all"
+                      >
+                        View dashboard
+                      </button>
+                      <button 
+                        onClick={() => onViewClient({ id: client.id, name: client.name, whitelabel: client.whitelabel })}
+                        className="py-1.5 border border-[#e4e9f2] bg-[#f0f3f9] hover:bg-[#e4e9f2] rounded-lg text-xs font-semibold text-blue-600 transition-all flex items-center justify-center gap-1"
+                      >
+                        <Eye size={12} /> Login as
+                      </button>
                     </div>
                   </div>
-                  <div className="grid grid-cols-3 gap-2 mb-3">
-                    <div className="bg-[#f0f3f9] rounded-lg p-2 text-center">
-                      <div className="text-base font-bold">1.2k</div>
-                      <div className="text-[10px] text-[#94a3b8] mt-[1px]">Mins</div>
-                    </div>
-                    <div className="bg-[#f0f3f9] rounded-lg p-2 text-center">
-                      <div className="text-base font-bold">342</div>
-                      <div className="text-[10px] text-[#94a3b8] mt-[1px]">Calls</div>
-                    </div>
-                    <div className="bg-[#f0f3f9] rounded-lg p-2 text-center">
-                      <div className="text-base font-bold text-green-600">82%</div>
-                      <div className="text-[10px] text-[#94a3b8] mt-[1px]">Res</div>
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <button 
-                      onClick={() => onViewClient({ id: 'acme', name: 'Acme Corporation' })}
-                      className="flex-1 py-1.5 border border-[#e4e9f2] bg-white hover:bg-[#f0f3f9] rounded-lg text-xs font-semibold text-[#475569] transition-all"
-                    >
-                      View dashboard
-                    </button>
-                    <button 
-                      onClick={() => onViewClient({ id: 'acme', name: 'Acme Corporation' })}
-                      className="flex-1 py-1.5 border border-[#e4e9f2] bg-[#f0f3f9] hover:bg-[#e4e9f2] rounded-lg text-xs font-semibold text-blue-600 transition-all flex items-center justify-center gap-1"
-                    >
-                      <Eye size={12} /> Login as
-                    </button>
-                  </div>
-                </div>
+                ))}
               </div>
             </div>
           )}
@@ -160,10 +218,18 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
                     </div>
                     <div>
                       <label className="text-[11px] font-semibold text-[#475569] uppercase tracking-[0.4px] mb-1.5 block">Industry</label>
-                      <select className="w-full bg-[#f0f3f9] border border-[#e4e9f2] rounded-[10px] px-3 py-2.5 text-[13px] outline-none">
+                      <select 
+                        value={newClient.industry}
+                        onChange={(e) => setNewClient({...newClient, industry: e.target.value})}
+                        className="w-full bg-[#f0f3f9] border border-[#e4e9f2] rounded-[10px] px-3 py-2.5 text-[13px] outline-none"
+                      >
                         <option>SaaS / Technology</option>
                         <option>Dental / Healthcare</option>
                         <option>Real Estate</option>
+                        <option>Ecommerce / Retail</option>
+                        <option>Legal / Finance</option>
+                        <option>Restaurant / Food</option>
+                        <option>Other</option>
                       </select>
                     </div>
                   </div>
@@ -171,26 +237,81 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
                   <div className="grid grid-cols-2 gap-3 mb-3.5">
                     <div>
                       <label className="text-[11px] font-semibold text-[#475569] uppercase tracking-[0.4px] mb-1.5 block">Admin full name</label>
-                      <input className="w-full bg-[#f0f3f9] border border-[#e4e9f2] rounded-[10px] px-3 py-2.5 text-[13px] outline-none" placeholder="John Smith" />
+                      <input 
+                        value={newClient.adminName}
+                        onChange={(e) => setNewClient({...newClient, adminName: e.target.value})}
+                        className="w-full bg-[#f0f3f9] border border-[#e4e9f2] rounded-[10px] px-3 py-2.5 text-[13px] outline-none" placeholder="John Smith" 
+                      />
                     </div>
                     <div>
                       <label className="text-[11px] font-semibold text-[#475569] uppercase tracking-[0.4px] mb-1.5 block">Admin email</label>
-                      <input type="email" className="w-full bg-[#f0f3f9] border border-[#e4e9f2] rounded-[10px] px-3 py-2.5 text-[13px] outline-none" placeholder="john@company.com" />
+                      <input 
+                        type="email" 
+                        value={newClient.email}
+                        onChange={(e) => setNewClient({...newClient, email: e.target.value})}
+                        className="w-full bg-[#f0f3f9] border border-[#e4e9f2] rounded-[10px] px-3 py-2.5 text-[13px] outline-none" placeholder="john@company.com" 
+                      />
                     </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3 mb-3.5">
                     <div>
                       <label className="text-[11px] font-semibold text-[#475569] uppercase tracking-[0.4px] mb-1.5 block">Login password</label>
-                      <input type="password" className="w-full bg-[#f0f3f9] border border-[#e4e9f2] rounded-[10px] px-3 py-2.5 text-[13px] outline-none" placeholder="Set a secure password" />
+                      <input 
+                        type="password" 
+                        value={newClient.password}
+                        onChange={(e) => setNewClient({...newClient, password: e.target.value})}
+                        className="w-full bg-[#f0f3f9] border border-[#e4e9f2] rounded-[10px] px-3 py-2.5 text-[13px] outline-none" placeholder="Set a secure password" 
+                      />
                     </div>
                     <div>
                       <label className="text-[11px] font-semibold text-[#475569] uppercase tracking-[0.4px] mb-1.5 block">Plan</label>
-                      <select className="w-full bg-[#f0f3f9] border border-[#e4e9f2] rounded-[10px] px-3 py-2.5 text-[13px] outline-none">
-                        <option>Starter (500 mins)</option>
-                        <option>Pro (2,000 mins)</option>
-                        <option>Business (5,000 mins)</option>
-                      </select>
+                      <div className="flex gap-2">
+                        <select 
+                          value={newClient.plan}
+                          onChange={(e) => setNewClient({...newClient, plan: e.target.value})}
+                          className="w-full bg-[#f0f3f9] border border-[#e4e9f2] rounded-[10px] px-3 py-2.5 text-[13px] outline-none"
+                        >
+                          <option>Starter (500 mins)</option>
+                          <option>Pro (2,000 mins)</option>
+                          <option>Business (5,000 mins)</option>
+                          <option>Enterprise (Unlimited)</option>
+                          <option>Custom</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {newClient.plan === 'Custom' && (
+                    <div className="mb-3.5">
+                      <label className="text-[11px] font-semibold text-[#475569] uppercase tracking-[0.4px] mb-1.5 block">Custom Plan Details</label>
+                      <input 
+                        type="text" 
+                        value={newClient.customPlan}
+                        onChange={(e) => setNewClient({...newClient, customPlan: e.target.value})}
+                        className="w-full bg-[#f0f3f9] border border-[#e4e9f2] rounded-[10px] px-3 py-2.5 text-[13px] outline-none" placeholder="e.g. 10,000 mins / month" 
+                      />
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-3 mb-3.5">
+                    <div>
+                      <label className="text-[11px] font-semibold text-[#475569] uppercase tracking-[0.4px] mb-1.5 block">Phone Number Assigned</label>
+                      <input 
+                        type="text" 
+                        value={newClient.phone}
+                        onChange={(e) => setNewClient({...newClient, phone: e.target.value})}
+                        className="w-full bg-[#f0f3f9] border border-[#e4e9f2] rounded-[10px] px-3 py-2.5 text-[13px] outline-none" placeholder="+1 415 555 0200" 
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-semibold text-[#475569] uppercase tracking-[0.4px] mb-1.5 block">Whitelabel (Company Brand)</label>
+                      <input 
+                        type="text" 
+                        value={newClient.whitelabel}
+                        onChange={(e) => setNewClient({...newClient, whitelabel: e.target.value})}
+                        className="w-full bg-[#f0f3f9] border border-[#e4e9f2] rounded-[10px] px-3 py-2.5 text-[13px] outline-none" placeholder="e.g. Acme AI" 
+                      />
                     </div>
                   </div>
 
@@ -215,7 +336,10 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
                     </div>
                   )}
 
-                  <button className="bg-blue-600 hover:bg-[#1e40af] text-white px-4 py-2.5 rounded-[10px] text-[13px] font-semibold transition-all w-full mt-2">
+                  <button 
+                    onClick={handleCreateClient}
+                    className="bg-blue-600 hover:bg-[#1e40af] text-white px-4 py-2.5 rounded-[10px] text-[13px] font-semibold transition-all w-full mt-2"
+                  >
                     Create client account
                   </button>
                 </div>

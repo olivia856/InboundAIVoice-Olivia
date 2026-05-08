@@ -361,7 +361,7 @@ function ClientDashboard({ user, onLogout, onBackToAdmin }) {
               </svg>
             </div>
             <div>
-              <h1 className="font-extrabold text-[15px] leading-tight tracking-tight">Azlon AI</h1>
+              <h1 className="font-extrabold text-[15px] leading-tight tracking-tight">{user?.whitelabel || 'Azlon AI'}</h1>
               <p className="text-2xs text-muted-foreground font-medium tracking-wide">Voice Intelligence</p>
             </div>
           </div>
