@@ -37,10 +37,19 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
   };
 
   useEffect(() => {
+    const saved = localStorage.getItem('azlon_clients');
+    if (saved) {
+      setClients(JSON.parse(saved));
+    }
+    
     fetchPlatformStats();
     const interval = setInterval(fetchPlatformStats, 30000);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    localStorage.setItem('azlon_clients', JSON.stringify(clients));
+  }, [clients]);
 
   const handleSlugPreview = (name) => {
     setNewClient(prev => ({ ...prev, name }));
