@@ -41,11 +41,6 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
     onViewClient({ id: clientData.id, name: clientData.name, whitelabel: clientData.whitelabel });
   };
 
-  const handleSlugPreview = (name) => {
-    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
-    setSlugPreview(slug ? `https://azlonai.com/login?org=${slug}` : '');
-  };
-
   const copySlug = () => {
     if (!slugPreview) return;
     navigator.clipboard.writeText(slugPreview);
