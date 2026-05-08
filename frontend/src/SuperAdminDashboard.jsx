@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Users, UserPlus, Activity, LogOut, Copy, Check, Eye, Settings } from 'lucide-react';
 
 export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
