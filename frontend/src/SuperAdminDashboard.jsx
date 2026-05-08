@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Users, UserPlus, Activity, LogOut, Copy, Check } from 'lucide-react';
+import { Users, UserPlus, Activity, LogOut, Copy, Check, Eye } from 'lucide-react';
 
 export default function SuperAdminDashboard({ user, onLogout }) {
   const [activeTab, setActiveTab] = useState('clients');
