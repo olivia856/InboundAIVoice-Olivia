@@ -7,8 +7,6 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   AreaChart, Area 
 } from 'recharts';
-import Login from './Login';
-import SuperAdminDashboard from './SuperAdminDashboard';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://saas-backend.xqnsvk.easypanel.host';
 
@@ -19,7 +17,7 @@ const toYYYYMMDD = (date) => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
-function ClientDashboard({ user, onLogout }) {
+export default function App() {
   const [activePage, setActivePage] = useState('dashboard');
   const [twilioConfig, setTwilioConfig] = useState({ sid: '', api_key: '', phone: '' });
   const [uvConfig, setUVConfig] = useState({ api_key: '' });
@@ -386,12 +384,10 @@ function ClientDashboard({ user, onLogout }) {
         </nav>
 
         {/* Status Footer */}
-        <div className="px-5 py-4 border-t border-border flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 status-dot" />
-            <span className="text-xs text-muted-foreground font-medium">Agent Online</span>
-          </div>
-          <button onClick={onLogout} className="text-xs text-muted-foreground hover:text-red-500 transition-colors font-semibold">Sign Out</button>
+        <div className="px-5 py-4 border-t border-border flex items-center gap-2.5">
+          <span className="w-2 h-2 rounded-full bg-emerald-500 status-dot" />
+          <span className="text-xs text-muted-foreground font-medium">Agent Online</span>
+          <span className="ml-auto text-2xs text-muted-foreground/40 font-mono">v2.0</span>
         </div>
       </aside>
 
@@ -2009,19 +2005,4 @@ function ClientDashboard({ user, onLogout }) {
       </main>
     </div>
   );
-}
-
-export default function App() {
-  const [authSession, setAuthSession] = useState(null); // { role, email }
-
-  if (!authSession) {
-    return <Login onLoginSuccess={(session) => setAuthSession(session)} />;
-  }
-
-  if (authSession.role === 'superadmin') {
-    return <SuperAdminDashboard user={authSession} onLogout={() => setAuthSession(null)} />;
-  }
-
-  // Client Dashboard
-  return <ClientDashboard user={authSession} onLogout={() => setAuthSession(null)} />;
 }
