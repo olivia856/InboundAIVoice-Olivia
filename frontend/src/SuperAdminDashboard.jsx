@@ -15,6 +15,33 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
 
   const [newClient, setNewClient] = useState({ name: '', industry: 'SaaS / Technology', adminName: '', email: '', password: '', phone: '', whitelabel: '', plan: 'Starter (500 mins)', customPlan: '' });
 
+  const fetchPlatformStats = async () => {
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'https://saas-backend.xqnsvk.easypanel.host'}/api/reports`);
+      const data = await res.json();
+      if (data.success) {
+        // For prototype, we'll map the global stats to our demo clients
+        setClients(prev => prev.map(c => {
+          if (c.id === 'demo' || c.id === 'acme') {
+            return {
+              ...c,
+              calls: data.metrics.totalCalls,
+              minsUsed: data.metrics.totalMinutes,
+              balance: data.metrics.bookedAppointments * 10 // Dummy balance logic
+            };
+          }
+          return c;
+        }));
+      }
+    } catch (e) { console.error("Stats fetch failed", e); }
+  };
+
+  useEffect(() => {
+    fetchPlatformStats();
+    const interval = setInterval(fetchPlatformStats, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
   const handleSlugPreview = (name) => {
     setNewClient(prev => ({ ...prev, name }));
     const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
