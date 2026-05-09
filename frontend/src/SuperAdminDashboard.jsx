@@ -4,7 +4,7 @@ import { Users, UserPlus, Activity, LogOut, Copy, Check, Eye, Settings, ToggleLe
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://livekit-ai-azlon-olivia-va-backend.xqnsvk.easypanel.host';
 
 function genClientCode(existing) {
-  const nums = existing.map(c => parseInt((c.clientCode || 'AZL-0000').split('-')[1] || '0'));
+  const nums = existing.map(c => parseInt((c.client_code || 'AZL-0000').split('-')[1] || '0'));
   const next = (Math.max(0, ...nums) + 1).toString().padStart(4, '0');
   return `AZL-${next}`;
 }
@@ -111,17 +111,15 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
     
     const clientData = {
       name: newClient.name || 'New Client',
-      industry: newClient.industry,
-      plan: newClient.plan === 'Custom' ? newClient.customPlan : newClient.plan.split(' ')[0],
+      client_code: clientCode,
       slug: slug,
-      whitelabel: newClient.whitelabel || newClient.name || 'Azlon AI',
-      clientCode,
       email: newClient.email,
       password: newClient.password,
-      phone: newClient.phone,
-      initials: newClient.name ? newClient.name.substring(0, 2).toUpperCase() : 'NC',
+      whitelabel: newClient.whitelabel || newClient.name || 'Azlon AI',
+      industry: newClient.industry,
+      plan: newClient.plan === 'Custom' ? newClient.customPlan : newClient.plan.split(' ')[0],
       status: 'Active',
-      agentEnabled: true
+      agent_enabled: true
     };
 
     try {
@@ -285,7 +283,7 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
                           <span className={`w-1.5 h-1.5 rounded-full ${client.agent_enabled ? 'bg-[#059669]' : 'bg-red-400'}`}></span>
                           {client.agent_enabled ? 'AI Active' : 'AI Off'}
                         </span>
-                        <span className="font-mono text-[9px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">{client.clientCode}</span>
+                        <span className="font-mono text-[9px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">{client.client_code}</span>
                       </div>
                     </div>
                     
@@ -323,7 +321,7 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
                         Settings
                       </button>
                       <button 
-                        onClick={() => onViewClient({ id: client.id, name: client.name, whitelabel: client.whitelabel, agentEnabled: client.agent_enabled, clientCode: client.clientCode })}
+                        onClick={() => onViewClient({ id: client.id, name: client.name, whitelabel: client.whitelabel, agentEnabled: client.agent_enabled, clientCode: client.client_code })}
                         className="py-1.5 border border-[#e4e9f2] bg-[#f0f3f9] hover:bg-[#e4e9f2] rounded-lg text-xs font-semibold text-blue-600 transition-all flex items-center justify-center gap-1"
                       >
                         <Eye size={12} /> Login as
