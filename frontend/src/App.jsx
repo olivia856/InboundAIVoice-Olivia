@@ -32,7 +32,7 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
 
   const fetchTwilioConfig = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/integrations/twilio`);
+      const res = await fetch(`${API_BASE}/api/integrations/twilio?client_id=${user?.clientCode}`);
       const data = await res.json();
       if (data.success && data.integration) setTwilioConfig(data.integration);
     } catch (e) { }
@@ -40,7 +40,7 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
 
   const fetchUVConfig = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/integrations/ultravox`);
+      const res = await fetch(`${API_BASE}/api/integrations/ultravox?client_id=${user?.clientCode}`);
       const data = await res.json();
       if (data.success && data.integration) setUVConfig(data.integration);
     } catch (e) { }
@@ -48,7 +48,7 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
 
   const fetchResendConfig = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/integrations/resend`);
+      const res = await fetch(`${API_BASE}/api/integrations/resend?client_id=${user?.clientCode}`);
       const data = await res.json();
       if (data.success && data.integration) setResendConfig(data.integration);
     } catch (e) { }
@@ -93,7 +93,7 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
       const res = await fetch(`${API_BASE}/api/integrations/twilio`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(twilioConfig)
+        body: JSON.stringify({...twilioConfig, client_id: user?.clientCode})
       });
       const data = await res.json();
       if (data.success) {
@@ -176,7 +176,7 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
       const res = await fetch(`${API_BASE}/api/leads`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...newLead, source: 'Manual Entry' })
+        body: JSON.stringify({ ...newLead, source: 'Manual Entry', client_id: user?.clientCode })
       });
       const data = await res.json();
       if (data.success) {
@@ -196,17 +196,18 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
   const isPortalClient = !!(user?.clientCode); // any client account (portal URL or Login as)
 
   const fetchAll = () => {
-    // Portal clients have isolated fresh dashboards — only fetch if Twilio is configured
-    if (isPortalClient) return;
-    fetch(`${API_BASE}/api/calls`).then(r => r.json()).then(d => { if (d.success) setCallLogs(d.calls); }).catch(() => {});
-    fetch(`${API_BASE}/api/contacts`).then(r => r.json()).then(d => { if (d?.success) setContacts(d.contacts); }).catch(() => {});
-    fetch(`${API_BASE}/api/leads`).then(r => r.json()).then(d => { if (d?.success) setLeads(d.leads); }).catch(() => {});
-    fetch(`${API_BASE}/api/knowledge_base`).then(r => r.json()).then(d => { if (d?.success) setKnowledgeBase(d.docs); }).catch(() => {});
-    fetch(`${API_BASE}/api/campaigns`).then(r => r.json()).then(d => { if (d?.success) setCampaigns(d.campaigns); }).catch(() => {});
-    fetch(`${API_BASE}/api/agent`).then(r => r.json()).then(d => { if (d.success && d.agent) setAgentSettings(d.agent); }).catch(() => {});
-    fetch(`${API_BASE}/api/integrations`).then(r => r.json()).then(d => { if (d.success) setIntegrations(d.integrations || []); }).catch(() => {});
-    fetch(`${API_BASE}/api/appointments`).then(r => r.json()).then(d => { if (d.success) setAppointments(d.appointments || []); }).catch(() => {});
-    fetch(`${API_BASE}/api/reports`).then(r => r.json()).then(d => { if (d.success) setReports(d.metrics); }).catch(() => {});
+    const clientId = user?.clientCode;
+    const query = clientId ? `?client_id=${clientId}` : '';
+    
+    fetch(`${API_BASE}/api/calls${query}`).then(r => r.json()).then(d => { if (d.success) setCallLogs(d.calls); }).catch(() => {});
+    fetch(`${API_BASE}/api/contacts${query}`).then(r => r.json()).then(d => { if (d?.success) setContacts(d.contacts); }).catch(() => {});
+    fetch(`${API_BASE}/api/leads${query}`).then(r => r.json()).then(d => { if (d?.success) setLeads(d.leads); }).catch(() => {});
+    fetch(`${API_BASE}/api/knowledge_base${query}`).then(r => r.json()).then(d => { if (d?.success) setKnowledgeBase(d.docs); }).catch(() => {});
+    fetch(`${API_BASE}/api/campaigns${query}`).then(r => r.json()).then(d => { if (d?.success) setCampaigns(d.campaigns); }).catch(() => {});
+    fetch(`${API_BASE}/api/agent${query}`).then(r => r.json()).then(d => { if (d.success && d.agent) setAgentSettings(d.agent); }).catch(() => {});
+    fetch(`${API_BASE}/api/integrations${query}`).then(r => r.json()).then(d => { if (d.success) setIntegrations(d.integrations || []); }).catch(() => {});
+    fetch(`${API_BASE}/api/appointments${query}`).then(r => r.json()).then(d => { if (d.success) setAppointments(d.appointments || []); }).catch(() => {});
+    fetch(`${API_BASE}/api/reports${query}`).then(r => r.json()).then(d => { if (d.success) setReports(d.metrics); }).catch(() => {});
   };
 
   useEffect(() => { 
@@ -222,7 +223,11 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
   const handleFixSentiment = async () => {
     setIsFixing(true);
     try {
-      const resp = await fetch(`${API_BASE}/api/fix-sentiment`, { method: 'POST' });
+      const resp = await fetch(`${API_BASE}/api/fix-sentiment`, { 
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ client_id: user?.clientCode })
+      });
       const data = await resp.json();
       if (data.success) {
         showToast(`Repaired ${data.fixed} calls!`);
@@ -242,7 +247,7 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
       const res = await fetch(`${API_BASE}/api/integrations`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ provider, api_key, meta_data })
+        body: JSON.stringify({ provider, api_key, meta_data, client_id: user?.clientCode })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
@@ -272,7 +277,7 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
       const res = await fetch(`${API_BASE}/api/tools/availability`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ target_date: dateStr })
+        body: JSON.stringify({ target_date: dateStr, client_id: user?.clientCode })
       });
       const data = await res.json();
       if (Array.isArray(data.available_slots)) {
@@ -790,7 +795,7 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                            const updated = { ...prev, non_working_dates: nextArr };
                            console.info(`[Holiday Toggle] date: ${dStr} | action: ${isHoliday ? 'REMOVE' : 'ADD'} | nextArr:`, nextArr);
                            // Background sync
-                           fetch(`${API_BASE}/api/agent`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(updated) });
+                           fetch(`${API_BASE}/api/agent`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({...updated, client_id: user?.clientCode}) });
                            return updated;
                          });
                       }} className={cn("text-[9px] px-2 py-0.5 rounded-full uppercase tracking-wider font-bold border transition-colors", (agentSettings?.non_working_dates || []).includes(toYYYYMMDD(calendarDate)) ? "bg-red-500/20 text-red-500 border-red-500/20" : "bg-white/5 border-border hover:bg-white/10 text-muted-foreground")}>
@@ -890,7 +895,7 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                        const btn = e.target;
                        btn.innerText = 'Saving...';
                        try {
-                         await fetch(`${API_BASE}/api/agent`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(agentSettings) });
+                         await fetch(`${API_BASE}/api/agent`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({...agentSettings, client_id: user?.clientCode}) });
                          btn.innerText = 'Saved!';
                          setTimeout(() => btn.innerText = 'Save Settings', 2000);
                        } catch(err) {} 
@@ -975,7 +980,7 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                     },
                     record_calls: e.target.record_calls.checked
                   };
-                  const res = await fetch(`${API_BASE}/api/agent`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                  const res = await fetch(`${API_BASE}/api/agent`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...payload, client_id: user?.clientCode }) });
                   const data = await res.json();
                   if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
                   btn.innerText = 'Saved!';
@@ -1296,8 +1301,15 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                   e.preventDefault();
                   const btn = e.target.querySelector('button[type=submit]'); btn.innerText = 'Uploading...';
                   try {
-                    const res = await fetch(`${API_BASE}/api/knowledge_base`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ title: e.target.kbtitle.value, content: e.target.kbcontent.value }) });
+                    const res = await fetch(`${API_BASE}/api/knowledge_base`, { 
+                      method: 'POST', 
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ 
+                        title: e.target.kbtitle.value, 
+                        content: e.target.kbcontent.value,
+                        client_id: user?.clientCode
+                      }) 
+                    });
                     const d = await res.json();
                     if(d.success) { setKnowledgeBase([d.doc, ...knowledgeBase]); showToast('Document uploaded!', 'success'); e.target.reset(); }
                   } catch(err) { }
@@ -1531,7 +1543,7 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                            showToast('Parsing file and launching campaign...', 'success');
                            const res = await fetch(`${API_BASE}/api/campaigns/csv-launch`, {
                              method: 'POST',
-                             headers: { 'Content-Type': 'application/json' },
+                             headers: { 'Content-Type': 'application/json', 'x-client-id': user?.clientCode },
                              body: JSON.stringify({ csvText, campaignName, voice, goal })
                            });
                            const data = await res.json();
@@ -1601,7 +1613,7 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                           showToast('Fetching Google Sheet and launching campaign...', 'success');
                           const res = await fetch(`${API_BASE}/api/campaigns/gsheet-launch`, {
                             method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
+                            headers: { 'Content-Type': 'application/json', 'x-client-id': user?.clientCode },
                             body: JSON.stringify({ sheetUrl: url, campaignName, voice, goal })
                           });
                           const data = await res.json();
@@ -1984,13 +1996,13 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                 if (calendarModal.mode === 'reschedule') {
                   res = await fetch(`${API_BASE}/api/appointments/manual/${calendarModal.rescheduleId}`, {
                     method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json', 'x-client-id': user?.clientCode },
                     body: JSON.stringify({ action: 'reschedule', start_time })
                   });
                 } else {
                   res = await fetch(`${API_BASE}/api/appointments/manual`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json', 'x-client-id': user?.clientCode },
                     body: JSON.stringify({ start_time, name: e.target.name.value, phone: e.target.phone.value })
                   });
                 }
@@ -2139,23 +2151,39 @@ export default function App() {
     }
   };
 
+  const [portalClient, setPortalClient] = useState(null);
+  const [isPortalLoading, setIsPortalLoading] = useState(!!orgSlug);
+
   // Detect if this is a client portal URL (?org=slug)
   const urlParams = new URLSearchParams(window.location.search);
   const orgSlug = urlParams.get('org');
 
-  // If org slug in URL, load client list from localStorage and find matching client
-  const getClientBySlug = (slug) => {
-    try {
-      const saved = localStorage.getItem('azlon_clients');
-      if (!saved) return null;
-      const clients = JSON.parse(saved);
-      return clients.find(c => c.slug === slug) || null;
-    } catch { return null; }
-  };
+  useEffect(() => {
+    if (orgSlug) {
+      setIsPortalLoading(true);
+      fetch(`${API_BASE}/api/clients/${orgSlug}`)
+        .then(r => r.json())
+        .then(data => {
+          if (data.success) setPortalClient(data.client);
+          setIsPortalLoading(false);
+        })
+        .catch(() => setIsPortalLoading(false));
+    }
+  }, [orgSlug]);
 
-  // CLIENT PORTAL MODE — unique URL for each client
+  // If org slug in URL, handle portal login/dashboard
   if (orgSlug) {
-    const portalClient = getClientBySlug(orgSlug);
+    if (isPortalLoading) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-[#f5f7fb]">
+          <div className="flex flex-col items-center gap-4">
+            <RefreshCw className="animate-spin text-blue-600" size={32} />
+            <p className="text-sm font-bold text-muted-foreground">Initializing Secure Portal...</p>
+          </div>
+        </div>
+      );
+    }
+
     if (!portalClient) {
       return (
         <div className="min-h-screen flex items-center justify-center bg-[#f5f7fb] text-[#0f172a] font-sans">

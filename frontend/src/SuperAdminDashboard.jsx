@@ -27,10 +27,18 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
 
   const [newClient, setNewClient] = useState({ name: '', industry: 'SaaS / Technology', adminName: '', email: '', password: '', phone: '', whitelabel: '', plan: 'Starter (500 mins)', customPlan: '' });
 
+  const [platformStats, setPlatformStats] = useState({ totalCalls: 0, totalMins: 0, activeClients: 0, activeAgents: 0 });
+
   const fetchPlatformStats = async () => {
-    // Stats are per-client. Until each client has their own Twilio/backend,
-    // we show 0 for all clients to avoid misleading shared data.
-    // When a client enters their Twilio credentials, their calls/mins will populate.
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/stats`);
+      const data = await res.json();
+      if (data.success) {
+        setPlatformStats(data.stats);
+      }
+    } catch (err) {
+      console.error("Failed to fetch platform stats");
+    }
   };
 
   const copyClientUrl = (slug) => {
@@ -54,17 +62,19 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
   };
 
   useEffect(() => {
-    const STORAGE_VERSION = 'v3'; // bump this to clear old cached data
-    const saved = localStorage.getItem('azlon_clients');
-    const savedVersion = localStorage.getItem('azlon_clients_version');
-    if (saved && savedVersion === STORAGE_VERSION) {
-      setClients(JSON.parse(saved));
-    } else {
-      // Clear old data with dummy values, start fresh
-      localStorage.removeItem('azlon_clients');
-      localStorage.setItem('azlon_clients_version', STORAGE_VERSION);
-    }
+    const fetchClients = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/clients`);
+        const data = await res.json();
+        if (data.success) {
+          setClients(data.clients);
+        }
+      } catch (err) {
+        console.error("Failed to fetch clients from backend.");
+      }
+    };
     
+    fetchClients();
     fetchPlatformStats();
     const interval = setInterval(fetchPlatformStats, 30000);
     return () => clearInterval(interval);
@@ -81,35 +91,42 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
     setSlugPreview(slug ? `https://livekit-ai-azlon-olivia-va-dashboard.xqnsvk.easypanel.host/?org=${slug}` : '');
   };
 
-  const handleCreateClient = () => {
-    const newId = newClient.name.toLowerCase().replace(/[^a-z0-9]+/g, '') + '_' + Date.now();
+  const handleCreateClient = async () => {
     const slug = newClient.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
-    setClients(prev => {
-      const clientCode = genClientCode(prev);
-      const clientData = {
-        id: newId,
-        name: newClient.name || 'New Client',
-        initials: newClient.name ? newClient.name.substring(0, 2).toUpperCase() : 'NC',
-        industry: newClient.industry,
-        plan: newClient.plan === 'Custom' ? newClient.customPlan : newClient.plan.split(' ')[0],
-        minsTotal: 500,
-        minsUsed: 0,
-        calls: 0,
-        balance: 0,
-        status: 'Active',
-        slug: slug,
-        whitelabel: newClient.whitelabel || newClient.name || 'Azlon AI',
-        clientCode,
-        agentEnabled: true,
-        email: newClient.email,
-        password: newClient.password,
-        phone: newClient.phone
-      };
-      setTimeout(() => {
+    const clientCode = genClientCode(clients);
+    
+    const clientData = {
+      name: newClient.name || 'New Client',
+      industry: newClient.industry,
+      plan: newClient.plan === 'Custom' ? newClient.customPlan : newClient.plan.split(' ')[0],
+      slug: slug,
+      whitelabel: newClient.whitelabel || newClient.name || 'Azlon AI',
+      clientCode,
+      email: newClient.email,
+      password: newClient.password,
+      phone: newClient.phone,
+      initials: newClient.name ? newClient.name.substring(0, 2).toUpperCase() : 'NC',
+      status: 'Active',
+      agentEnabled: true
+    };
+
+    try {
+      const res = await fetch(`${API_BASE}/api/clients`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(clientData)
+      });
+      const data = await res.json();
+      if (data.success) {
+        setClients(prev => [...prev, data.client]);
         showToast(`Client "${clientData.name}" created! Code: ${clientCode}`);
-      }, 100);
-      return [...prev, clientData];
-    });
+      } else {
+        showToast(data.error || "Failed to create client", "error");
+      }
+    } catch (err) {
+      showToast("Network error creating client", "error");
+    }
+
     setNewClient({ name: '', industry: 'SaaS / Technology', adminName: '', email: '', password: '', phone: '', whitelabel: '', plan: 'Starter (500 mins)', customPlan: '' });
     setSlugPreview('');
     setActiveTab('clients');
@@ -117,10 +134,22 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
 
   const [editingClient, setEditingClient] = useState(null);
 
-  const handleUpdateClient = (updatedClient) => {
-    setClients(prev => prev.map(c => c.id === updatedClient.id ? { ...c, ...updatedClient } : c));
-    setEditingClient(null);
-    showToast(`Changes saved for "${updatedClient.name}"!`);
+  const handleUpdateClient = async (updatedClient) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/clients/${updatedClient.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedClient)
+      });
+      const data = await res.json();
+      if (data.success) {
+        setClients(prev => prev.map(c => c.id === updatedClient.id ? { ...c, ...updatedClient } : c));
+        setEditingClient(null);
+        showToast(`Changes saved for "${updatedClient.name}"!`);
+      }
+    } catch (err) {
+      showToast("Update failed", "error");
+    }
   };
 
   const copySlug = () => {
@@ -237,18 +266,14 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
                       </div>
                     </div>
                     
-                    <div className="grid grid-cols-3 gap-2 mb-4">
-                      <div className="bg-[#f0f3f9] rounded-lg p-2 text-center">
-                        <div className="text-[15px] font-bold">{client.calls}</div>
-                        <div className="text-[10px] text-[#94a3b8] mt-[1px]">Calls</div>
+                    <div className="grid grid-cols-2 gap-3 mb-4">
+                      <div className="bg-[#f8fafc] rounded-xl p-3 border border-[#e4e9f2]">
+                        <div className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wider mb-0.5">Calls</div>
+                        <div className="text-[15px] font-bold text-blue-600">{client.calls_count || 0}</div>
                       </div>
-                      <div className="bg-[#f0f3f9] rounded-lg p-2 text-center">
-                        <div className="text-[15px] font-bold">{client.minsUsed}</div>
-                        <div className="text-[10px] text-[#94a3b8] mt-[1px]">Mins</div>
-                      </div>
-                      <div className="bg-[#f0f3f9] rounded-lg p-2 text-center">
-                        <div className="text-[15px] font-bold">${client.balance}</div>
-                        <div className="text-[10px] text-[#94a3b8] mt-[1px]">Balance</div>
+                      <div className="bg-[#f8fafc] rounded-xl p-3 border border-[#e4e9f2]">
+                        <div className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wider mb-0.5">Minutes</div>
+                        <div className="text-[15px] font-bold text-[#0f172a]">{client.mins_used || 0}</div>
                       </div>
                     </div>
 
@@ -275,7 +300,7 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
                         Settings
                       </button>
                       <button 
-                        onClick={() => onViewClient({ id: client.id, name: client.name, whitelabel: client.whitelabel, agentEnabled: client.agentEnabled })}
+                        onClick={() => onViewClient({ id: client.id, name: client.name, whitelabel: client.whitelabel, agentEnabled: client.agentEnabled, clientCode: client.clientCode })}
                         className="py-1.5 border border-[#e4e9f2] bg-[#f0f3f9] hover:bg-[#e4e9f2] rounded-lg text-xs font-semibold text-blue-600 transition-all flex items-center justify-center gap-1"
                       >
                         <Eye size={12} /> Login as
@@ -452,74 +477,56 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
 
           {/* PLATFORM STATS VIEW */}
           {activeTab === 'platform-stats' && (
-            <div>
-              <div className="flex items-center justify-between mb-5">
-                <h2 className="text-lg font-bold tracking-tight">Platform Overview</h2>
+            <div className="fade-in">
+              <h2 className="text-xl font-bold mb-6">Platform Overview</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
+                {[
+                  { label: 'Total Clients', value: platformStats.activeClients, icon: Users, color: 'text-blue-600', bg: 'bg-blue-50' },
+                  { label: 'Active Agents', value: platformStats.activeAgents, icon: Zap, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+                  { label: 'Platform Calls', value: platformStats.totalCalls, icon: Phone, color: 'text-purple-600', bg: 'bg-purple-50' },
+                  { label: 'Total Minutes', value: platformStats.totalMins, icon: Activity, color: 'text-orange-600', bg: 'bg-orange-50' },
+                ].map((stat, i) => (
+                  <div key={i} className="bg-white border border-[#e4e9f2] rounded-2xl p-6 shadow-sm">
+                    <div className={`${stat.bg} ${stat.color} w-10 h-10 rounded-xl flex items-center justify-center mb-4`}>
+                      <stat.icon size={20} />
+                    </div>
+                    <div className="text-xs font-bold text-[#94a3b8] uppercase tracking-wider mb-1">{stat.label}</div>
+                    <div className="text-3xl font-black">{stat.value}</div>
+                  </div>
+                ))}
               </div>
-              <div className="grid grid-cols-4 gap-4 mb-5">
-                <div className="bg-white border border-[#e4e9f2] rounded-[14px] p-5 shadow-[0_1px_3px_rgba(15,23,42,0.06)] relative overflow-hidden">
-                  <div className="absolute -top-5 -right-5 w-16 h-16 rounded-full bg-blue-600/5"></div>
-                  <div className="text-[11px] font-semibold text-[#94a3b8] uppercase tracking-[0.5px] mb-2">Total clients</div>
-                  <div className="text-[26px] font-bold tracking-tight leading-none mb-1.5">3</div>
-                  <div className="text-xs font-medium text-green-600">↑ 1 this month</div>
+              
+              <div className="bg-white border border-[#e4e9f2] rounded-[14px] shadow-sm overflow-hidden">
+                <div className="px-5 py-3.5 border-b border-[#e4e9f2] flex justify-between items-center bg-[#f8fafc]">
+                  <h3 className="text-sm font-semibold">Live Client Usage</h3>
+                  <button onClick={fetchPlatformStats} className="text-[11px] font-bold text-blue-600 flex items-center gap-1">
+                    <RefreshCw size={12} /> Sync All
+                  </button>
                 </div>
-                <div className="bg-white border border-[#e4e9f2] rounded-[14px] p-5 shadow-[0_1px_3px_rgba(15,23,42,0.06)] relative overflow-hidden">
-                  <div className="absolute -top-5 -right-5 w-16 h-16 rounded-full bg-green-600/5"></div>
-                  <div className="text-[11px] font-semibold text-[#94a3b8] uppercase tracking-[0.5px] mb-2">Total calls (all)</div>
-                  <div className="text-[26px] font-bold tracking-tight leading-none mb-1.5">4,821</div>
-                  <div className="text-xs font-medium text-green-600">↑ 18% MTD</div>
-                </div>
-                <div className="bg-white border border-[#e4e9f2] rounded-[14px] p-5 shadow-[0_1px_3px_rgba(15,23,42,0.06)] relative overflow-hidden">
-                  <div className="absolute -top-5 -right-5 w-16 h-16 rounded-full bg-amber-600/5"></div>
-                  <div className="text-[11px] font-semibold text-[#94a3b8] uppercase tracking-[0.5px] mb-2">Platform revenue</div>
-                  <div className="text-[26px] font-bold tracking-tight leading-none mb-1.5">$1,247</div>
-                  <div className="text-xs font-medium text-green-600">↑ $210 vs last month</div>
-                </div>
-                <div className="bg-white border border-[#e4e9f2] rounded-[14px] p-5 shadow-[0_1px_3px_rgba(15,23,42,0.06)] relative overflow-hidden">
-                  <div className="absolute -top-5 -right-5 w-16 h-16 rounded-full bg-purple-600/5"></div>
-                  <div className="text-[11px] font-semibold text-[#94a3b8] uppercase tracking-[0.5px] mb-2">Active agents</div>
-                  <div className="text-[26px] font-bold tracking-tight leading-none mb-1.5">7</div>
-                  <div className="text-xs font-medium text-green-600">All healthy</div>
-                </div>
-              </div>
-
-              <div className="bg-white border border-[#e4e9f2] rounded-[14px] shadow-[0_1px_3px_rgba(15,23,42,0.06)]">
-                <div className="px-5 py-3.5 border-b border-[#e4e9f2]">
-                  <h3 className="text-sm font-semibold">All clients usage</h3>
-                </div>
-                <div className="p-0 overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr>
-                        <th className="px-4 py-2.5 text-[11px] font-semibold text-[#94a3b8] uppercase tracking-[0.5px] border-b border-[#e4e9f2]">Client</th>
-                        <th className="px-4 py-2.5 text-[11px] font-semibold text-[#94a3b8] uppercase tracking-[0.5px] border-b border-[#e4e9f2]">Plan</th>
-                        <th className="px-4 py-2.5 text-[11px] font-semibold text-[#94a3b8] uppercase tracking-[0.5px] border-b border-[#e4e9f2]">Minutes used</th>
-                        <th className="px-4 py-2.5 text-[11px] font-semibold text-[#94a3b8] uppercase tracking-[0.5px] border-b border-[#e4e9f2]">Calls</th>
-                        <th className="px-4 py-2.5 text-[11px] font-semibold text-[#94a3b8] uppercase tracking-[0.5px] border-b border-[#e4e9f2]">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr className="hover:bg-[#f0f3f9]">
-                        <td className="px-4 py-3 text-[13px] font-semibold border-b border-[#e4e9f2]">Acme Corporation</td>
-                        <td className="px-4 py-3 text-[13px] border-b border-[#e4e9f2]">Business (5k)</td>
-                        <td className="px-4 py-3 text-[13px] border-b border-[#e4e9f2]">1,204 / 5,000</td>
-                        <td className="px-4 py-3 text-[13px] border-b border-[#e4e9f2]">342</td>
-                        <td className="px-4 py-3 border-b border-[#e4e9f2]">
-                          <span className="bg-[#ecfdf5] text-[#059669] px-2 py-0.5 rounded-full text-[11px] font-bold">Active</span>
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="bg-white border-b border-[#e4e9f2]">
+                      <th className="py-3 px-5 text-[#94a3b8] font-bold uppercase tracking-wider">Client Name</th>
+                      <th className="py-3 px-5 text-[#94a3b8] font-bold uppercase tracking-wider">Total Calls</th>
+                      <th className="py-3 px-5 text-[#94a3b8] font-bold uppercase tracking-wider">Minutes Used</th>
+                      <th className="py-3 px-5 text-[#94a3b8] font-bold uppercase tracking-wider">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {clients.map(c => (
+                      <tr key={c.id} className="border-b border-[#e4e9f2] hover:bg-[#f8fafc]">
+                        <td className="py-3 px-5 font-bold">{c.name}</td>
+                        <td className="py-3 px-5 font-medium text-blue-600">{c.calls_count || 0}</td>
+                        <td className="py-3 px-5 font-medium">{c.mins_used || 0} mins</td>
+                        <td className="py-3 px-5">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${c.status === 'Active' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
+                            {c.status}
+                          </span>
                         </td>
                       </tr>
-                      <tr className="hover:bg-[#f0f3f9]">
-                        <td className="px-4 py-3 text-[13px] font-semibold">Dental Smile</td>
-                        <td className="px-4 py-3 text-[13px]">Starter (500)</td>
-                        <td className="px-4 py-3 text-[13px]">412 / 500</td>
-                        <td className="px-4 py-3 text-[13px]">98</td>
-                        <td className="px-4 py-3">
-                          <span className="bg-[#ecfdf5] text-[#059669] px-2 py-0.5 rounded-full text-[11px] font-bold">Active</span>
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}
