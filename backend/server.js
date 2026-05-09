@@ -236,14 +236,31 @@ app.delete('/api/clients/:id', async (req, res) => {
     }
 });
 
+// Portal Lookup by Slug
+app.get('/api/clients/:slug', async (req, res) => {
+    try {
+        const { slug } = req.params;
+        const { data, error } = await supabase.from('clients').select('*').eq('slug', slug).maybeSingle();
+        if (error) throw error;
+        if (!data) return res.status(404).json({ success: false, error: "Client not found" });
+        res.json({ success: true, client: data });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 app.post('/api/twilio/inbound', async (req, res) => {
     try {
         const { To, From, CallSid } = req.body;
         console.log(`[Twilio Inbound] Incoming call from ${From} to ${To} (Sid: ${CallSid})`);
 
         // 0. Find the Client by Twilio Number
-        const { data: client } = await supabase.from('clients').select('*').eq('twilio_phone', To).maybeSingle();
-        const clientId = client?.id || 'AZL-0004'; // Fallback to demo client if not found
+        const { data: client } = await supabase.from('clients').select('*').eq('phone', To).maybeSingle();
+        const clientId = client?.id || null; 
+        
+        if (!clientId) {
+            console.log(`[Twilio Inbound] No specific client found for ${To}. Using platform default.`);
+        }
 
         // 1. Fetch Integration Keys from Database
         const { data: uvInt } = await supabase.from('integrations').select('*').eq('provider', 'ultravox').eq('client_id', clientId).maybeSingle();

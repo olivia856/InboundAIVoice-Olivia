@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Users, UserPlus, Activity, LogOut, Copy, Check, Eye, Settings, ToggleLeft, ToggleRight, CheckCircle } from 'lucide-react';
+import { Users, UserPlus, Activity, LogOut, Copy, Check, Eye, Settings, ToggleLeft, ToggleRight, CheckCircle, Zap, RefreshCw, Phone } from 'lucide-react';
+
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://saas-backend.xqnsvk.easypanel.host';
 
 function genClientCode(existing) {
   const nums = existing.map(c => parseInt((c.clientCode || 'AZL-0000').split('-')[1] || '0'));
@@ -18,12 +20,7 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
     setTimeout(() => setToast(null), 3000);
   };
   
-  const [clients, setClients] = useState([
-    { id: 'acme', name: 'Acme Corporation', initials: 'AC', industry: 'SaaS / Technology', plan: 'Pro', minsTotal: 2000, minsUsed: 0, calls: 0, balance: 0, status: 'Active', slug: 'acme-corporation', whitelabel: 'Acme Corporation', clientCode: 'AZL-0001', agentEnabled: true },
-    { id: 'smile', name: 'SmilePlus Dental', initials: 'SP', industry: 'Dental / Healthcare', plan: 'Starter', minsTotal: 500, minsUsed: 0, calls: 0, balance: 0, status: 'Active', slug: 'smileplus-dental', whitelabel: 'SmilePlus Dental', clientCode: 'AZL-0002', agentEnabled: true },
-    { id: 'propmax', name: 'PropMax Real Estate', initials: 'PM', industry: 'Real Estate', plan: 'Business', minsTotal: 5000, minsUsed: 0, calls: 0, balance: 0, status: 'Active', slug: 'propmax-real-estate', whitelabel: 'PropMax Real Estate', clientCode: 'AZL-0003', agentEnabled: true },
-    { id: 'demo', name: 'Demo', initials: 'DE', industry: 'Real Estate', plan: 'Pro', minsTotal: 2000, minsUsed: 0, calls: 0, balance: 0, status: 'Active', slug: 'demo', whitelabel: 'Azlon AI', clientCode: 'AZL-0004', agentEnabled: true }
-  ]);
+  const [clients, setClients] = useState([]);
 
   const [newClient, setNewClient] = useState({ name: '', industry: 'SaaS / Technology', adminName: '', email: '', password: '', phone: '', whitelabel: '', plan: 'Starter (500 mins)', customPlan: '' });
 
