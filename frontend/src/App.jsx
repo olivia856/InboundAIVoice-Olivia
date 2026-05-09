@@ -192,7 +192,11 @@ function ClientDashboard({ user, onLogout, onBackToAdmin }) {
     setTimeout(() => setToast(null), 3000);
   };
 
+  const isPortalClient = user?.role === 'client'; // logged in via ?org= URL
+
   const fetchAll = () => {
+    // Portal clients have isolated fresh dashboards — only fetch if Twilio is configured
+    if (isPortalClient) return;
     fetch(`${API_BASE}/api/calls`).then(r => r.json()).then(d => { if (d.success) setCallLogs(d.calls); }).catch(() => {});
     fetch(`${API_BASE}/api/contacts`).then(r => r.json()).then(d => { if (d?.success) setContacts(d.contacts); }).catch(() => {});
     fetch(`${API_BASE}/api/leads`).then(r => r.json()).then(d => { if (d?.success) setLeads(d.leads); }).catch(() => {});
@@ -335,8 +339,58 @@ function ClientDashboard({ user, onLogout, onBackToAdmin }) {
     }
   }, []);
 
+  const [agentToggleModal, setAgentToggleModal] = useState(null); // { action: 'pause'|'enable' }
+
   return (
     <div className={`flex h-screen bg-background text-foreground font-sans overflow-hidden ${theme}`}>
+      
+      {/* AI Agent Toggle Confirmation Modal */}
+      {agentToggleModal && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+          <div className="bg-card border border-border rounded-2xl shadow-2xl w-full max-w-[400px] overflow-hidden">
+            <div className={`px-6 py-4 border-b border-border ${agentToggleModal.action === 'pause' ? 'bg-red-500/5' : 'bg-emerald-500/5'}`}>
+              <h3 className="font-bold text-sm">
+                {agentToggleModal.action === 'pause' ? '⏸ Pause AI Agent?' : '▶ Enable AI Agent?'}
+              </h3>
+            </div>
+            <div className="p-6">
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                {agentToggleModal.action === 'pause'
+                  ? 'Pausing the AI Agent will stop all inbound and outbound calls. Your callers will hear no response. You can enable it again at any time.'
+                  : 'Enabling the AI Agent will allow it to handle inbound and outbound calls again using your configured settings.'}
+              </p>
+            </div>
+            <div className="px-6 py-4 bg-muted/20 border-t border-border flex items-center justify-end gap-3">
+              <button onClick={() => setAgentToggleModal(null)} className="px-4 py-2 text-sm font-semibold text-muted-foreground hover:text-foreground">
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  try {
+                    const saved = localStorage.getItem('azlon_clients');
+                    if (saved) {
+                      const clients = JSON.parse(saved);
+                      const idx = clients.findIndex(c => c.id === user.id);
+                      if (idx >= 0) {
+                        clients[idx].agentEnabled = agentToggleModal.action === 'enable';
+                        localStorage.setItem('azlon_clients', JSON.stringify(clients));
+                        localStorage.setItem('azlon_clients_version', 'v3');
+                      }
+                    }
+                  } catch {}
+                  setAgentToggleModal(null);
+                  showToast(agentToggleModal.action === 'pause' ? 'AI Agent paused.' : 'AI Agent enabled!');
+                }}
+                className={`px-5 py-2 rounded-xl text-sm font-bold text-white transition-all ${
+                  agentToggleModal.action === 'pause' ? 'bg-red-500 hover:bg-red-600' : 'bg-emerald-500 hover:bg-emerald-600'
+                }`}
+              >
+                {agentToggleModal.action === 'pause' ? 'Yes, Pause Agent' : 'Yes, Enable Agent'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       
       {/* Global Toast — Premium */}
       {toast && (
@@ -402,18 +456,7 @@ function ClientDashboard({ user, onLogout, onBackToAdmin }) {
               </div>
               <button
                 onClick={() => {
-                  const updated = { ...user, agentEnabled: !(user?.agentEnabled !== false) };
-                  // Persist to localStorage
-                  try {
-                    const saved = localStorage.getItem('azlon_clients');
-                    if (saved) {
-                      const clients = JSON.parse(saved);
-                      const idx = clients.findIndex(c => c.id === user.id);
-                      if (idx >= 0) { clients[idx].agentEnabled = updated.agentEnabled; localStorage.setItem('azlon_clients', JSON.stringify(clients)); }
-                    }
-                  } catch {}
-                  // Visual feedback only for now
-                  alert(user?.agentEnabled !== false ? '⏸ AI Agent paused. Incoming and outbound calls are disabled.' : '▶ AI Agent re-enabled!');
+                  setAgentToggleModal({ action: user?.agentEnabled !== false ? 'pause' : 'enable' });
                 }}
                 className={`text-[10px] font-bold px-2.5 py-1 rounded-lg transition-all ${
                   user?.agentEnabled !== false

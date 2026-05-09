@@ -72,12 +72,13 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
 
   useEffect(() => {
     localStorage.setItem('azlon_clients', JSON.stringify(clients));
+    localStorage.setItem('azlon_clients_version', 'v3');
   }, [clients]);
 
   const handleSlugPreview = (name) => {
     setNewClient(prev => ({ ...prev, name }));
     const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
-    setSlugPreview(slug ? `https://azlonai.com/login?org=${slug}` : '');
+    setSlugPreview(slug ? `https://livekit-ai-azlon-olivia-va-dashboard.xqnsvk.easypanel.host/?org=${slug}` : '');
   };
 
   const handleCreateClient = () => {
@@ -101,6 +102,7 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
         clientCode,
         agentEnabled: true,
         email: newClient.email,
+        password: newClient.password,
         phone: newClient.phone
       };
       setTimeout(() => {
@@ -108,6 +110,8 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
       }, 100);
       return [...prev, clientData];
     });
+    setNewClient({ name: '', industry: 'SaaS / Technology', adminName: '', email: '', password: '', phone: '', whitelabel: '', plan: 'Starter (500 mins)', customPlan: '' });
+    setSlugPreview('');
     setActiveTab('clients');
   };
 
@@ -121,7 +125,7 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
 
   const copySlug = () => {
     if (!slugPreview) return;
-    navigator.clipboard.writeText(slugPreview);
+    navigator.clipboard.writeText(slugPreview).then(() => showToast('URL copied!')).catch(() => {});
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
