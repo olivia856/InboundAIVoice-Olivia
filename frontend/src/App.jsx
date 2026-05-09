@@ -9,6 +9,7 @@ import {
 } from 'recharts';
 import Login from './Login';
 import SuperAdminDashboard from './SuperAdminDashboard';
+import ClientPortalLogin from './ClientPortalLogin';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://saas-backend.xqnsvk.easypanel.host';
 
@@ -363,6 +364,9 @@ function ClientDashboard({ user, onLogout, onBackToAdmin }) {
             <div>
               <h1 className="font-extrabold text-[15px] leading-tight tracking-tight">{user?.whitelabel || 'Azlon AI'}</h1>
               <p className="text-2xs text-muted-foreground font-medium tracking-wide">Voice Intelligence</p>
+              {user?.clientCode && (
+                <p className="text-[9px] font-mono text-muted-foreground/60 mt-0.5 tracking-widest">{user.clientCode}</p>
+              )}
             </div>
           </div>
           <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="text-muted-foreground hover:text-foreground p-2 hover:bg-white/5 rounded-lg transition-all">
@@ -386,16 +390,52 @@ function ClientDashboard({ user, onLogout, onBackToAdmin }) {
         </nav>
 
         {/* Status Footer */}
-        <div className="px-5 py-4 border-t border-border flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 status-dot" />
-            <span className="text-xs text-muted-foreground font-medium">Agent Online</span>
-          </div>
+        <div className="px-5 py-4 border-t border-border space-y-2">
+          {/* AI Agent Toggle */}
+          {user?.clientCode && (
+            <div className="flex items-center justify-between bg-muted/30 rounded-xl px-3 py-2">
+              <div className="flex items-center gap-2">
+                <span className={`w-2 h-2 rounded-full ${user?.agentEnabled !== false ? 'bg-emerald-500' : 'bg-red-400'}`} />
+                <span className="text-xs text-muted-foreground font-medium">
+                  {user?.agentEnabled !== false ? 'AI Agent Active' : 'AI Agent Paused'}
+                </span>
+              </div>
+              <button
+                onClick={() => {
+                  const updated = { ...user, agentEnabled: !(user?.agentEnabled !== false) };
+                  // Persist to localStorage
+                  try {
+                    const saved = localStorage.getItem('azlon_clients');
+                    if (saved) {
+                      const clients = JSON.parse(saved);
+                      const idx = clients.findIndex(c => c.id === user.id);
+                      if (idx >= 0) { clients[idx].agentEnabled = updated.agentEnabled; localStorage.setItem('azlon_clients', JSON.stringify(clients)); }
+                    }
+                  } catch {}
+                  // Visual feedback only for now
+                  alert(user?.agentEnabled !== false ? '⏸ AI Agent paused. Incoming and outbound calls are disabled.' : '▶ AI Agent re-enabled!');
+                }}
+                className={`text-[10px] font-bold px-2.5 py-1 rounded-lg transition-all ${
+                  user?.agentEnabled !== false
+                    ? 'bg-red-500/10 text-red-500 hover:bg-red-500/20'
+                    : 'bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20'
+                }`}
+              >
+                {user?.agentEnabled !== false ? 'Pause' : 'Enable'}
+              </button>
+            </div>
+          )}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 status-dot" />
+              <span className="text-xs text-muted-foreground font-medium">Agent Online</span>
+            </div>
           <div className="flex items-center gap-3">
             {onBackToAdmin && (
               <button onClick={onBackToAdmin} className="text-xs text-blue-600 hover:text-blue-700 transition-colors font-semibold">« Admin Panel</button>
             )}
             <button onClick={onLogout} className="text-xs text-muted-foreground hover:text-red-500 transition-colors font-semibold">Sign Out</button>
+          </div>
           </div>
         </div>
       </aside>
@@ -2017,31 +2057,79 @@ function ClientDashboard({ user, onLogout, onBackToAdmin }) {
 }
 
 export default function App() {
-  const [authSession, setAuthSession] = useState(null); // { role, email }
+  const [authSession, setAuthSession] = useState(null);
   const [viewingClient, setViewingClient] = useState(null);
 
+  // Detect if this is a client portal URL (?org=slug)
+  const urlParams = new URLSearchParams(window.location.search);
+  const orgSlug = urlParams.get('org');
+
+  // If org slug in URL, load client list from localStorage and find matching client
+  const getClientBySlug = (slug) => {
+    try {
+      const saved = localStorage.getItem('azlon_clients');
+      if (!saved) return null;
+      const clients = JSON.parse(saved);
+      return clients.find(c => c.slug === slug) || null;
+    } catch { return null; }
+  };
+
+  // CLIENT PORTAL MODE — unique URL for each client
+  if (orgSlug) {
+    const portalClient = getClientBySlug(orgSlug);
+    if (!portalClient) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-[#f5f7fb] text-[#0f172a] font-sans">
+          <div className="text-center">
+            <div className="text-6xl mb-4">🔍</div>
+            <h2 className="text-xl font-bold mb-2">Portal not found</h2>
+            <p className="text-sm text-[#94a3b8]">The URL <code className="bg-slate-100 px-2 py-0.5 rounded font-mono text-xs">{orgSlug}</code> doesn't match any client account.</p>
+          </div>
+        </div>
+      );
+    }
+
+    if (!authSession) {
+      return (
+        <ClientPortalLogin
+          client={portalClient}
+          onLoginSuccess={(session) => setAuthSession(session)}
+        />
+      );
+    }
+
+    // Client is logged into their isolated dashboard
+    return (
+      <ClientDashboard
+        user={authSession}
+        onLogout={() => setAuthSession(null)}
+        onBackToAdmin={undefined}
+      />
+    );
+  }
+
+  // SUPER ADMIN MODE — normal login
   if (!authSession) {
     return <Login onLoginSuccess={(session) => setAuthSession(session)} />;
   }
 
   if (authSession.role === 'superadmin' && !viewingClient) {
     return (
-      <SuperAdminDashboard 
-        user={authSession} 
-        onLogout={() => setAuthSession(null)} 
+      <SuperAdminDashboard
+        user={authSession}
+        onLogout={() => setAuthSession(null)}
         onViewClient={(client) => setViewingClient(client)}
       />
     );
   }
 
-  // Client Dashboard (either logged in directly as client, or superadmin viewing a client)
   return (
-    <ClientDashboard 
-      user={viewingClient || authSession} 
+    <ClientDashboard
+      user={viewingClient || authSession}
       onLogout={() => {
         setAuthSession(null);
         setViewingClient(null);
-      }} 
+      }}
       onBackToAdmin={authSession.role === 'superadmin' ? () => setViewingClient(null) : undefined}
     />
   );

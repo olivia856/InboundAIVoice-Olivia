@@ -54,9 +54,15 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
   };
 
   useEffect(() => {
+    const STORAGE_VERSION = 'v3'; // bump this to clear old cached data
     const saved = localStorage.getItem('azlon_clients');
-    if (saved) {
+    const savedVersion = localStorage.getItem('azlon_clients_version');
+    if (saved && savedVersion === STORAGE_VERSION) {
       setClients(JSON.parse(saved));
+    } else {
+      // Clear old data with dummy values, start fresh
+      localStorage.removeItem('azlon_clients');
+      localStorage.setItem('azlon_clients_version', STORAGE_VERSION);
     }
     
     fetchPlatformStats();
@@ -663,14 +669,43 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
                   />
                 </div>
 
+                <div className="bg-blue-50 border border-blue-200/50 rounded-xl p-4 mb-4">
+                  <div className="flex items-center gap-2 text-blue-800 font-bold text-[12px] mb-3">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                    Client Login Credentials
+                  </div>
+                  <div className="mb-2">
+                    <label className="text-[10px] font-bold text-blue-600 uppercase tracking-wider mb-1 block">Current Email</label>
+                    <div className="bg-white border border-blue-200 rounded-lg px-3 py-2 text-[12px] font-mono text-slate-700">
+                      {editingClient.email || <span className="text-slate-400 italic">Not set</span>}
+                    </div>
+                  </div>
+                  <div className="mb-2">
+                    <label className="text-[10px] font-bold text-blue-600 uppercase tracking-wider mb-1 block">Current Password</label>
+                    <div className="bg-white border border-blue-200 rounded-lg px-3 py-2 text-[12px] font-mono text-slate-700">
+                      {editingClient.password || <span className="text-slate-400 italic">Not set</span>}
+                    </div>
+                  </div>
+                </div>
                 <div className="bg-amber-50 border border-amber-200/50 rounded-xl p-4 mb-2">
-                   <div className="flex items-center gap-2 text-amber-800 font-bold text-[12px] mb-1">
-                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
-                     Admin Security
+                   <div className="flex items-center gap-2 text-amber-800 font-bold text-[12px] mb-3">
+                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                     Update / Reset Credentials
                    </div>
-                   <div className="grid grid-cols-2 gap-3">
-                     <input type="text" placeholder="Admin Email" className="bg-white border border-amber-200 rounded-lg px-3 py-2 text-[12px] outline-none" />
-                     <input type="password" placeholder="New Password" className="bg-white border border-amber-200 rounded-lg px-3 py-2 text-[12px] outline-none" />
+                   <div className="space-y-2">
+                     <input
+                       type="text"
+                       placeholder="New Email"
+                       defaultValue={editingClient.email}
+                       onChange={(e) => setEditingClient({...editingClient, email: e.target.value})}
+                       className="w-full bg-white border border-amber-200 rounded-lg px-3 py-2 text-[12px] outline-none focus:border-amber-400"
+                     />
+                     <input
+                       type="text"
+                       placeholder="New Password (leave blank to keep)"
+                       onChange={(e) => setEditingClient({...editingClient, password: e.target.value || editingClient.password})}
+                       className="w-full bg-white border border-amber-200 rounded-lg px-3 py-2 text-[12px] outline-none focus:border-amber-400"
+                     />
                    </div>
                 </div>
               </div>
