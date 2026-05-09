@@ -47,15 +47,32 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
     });
   };
 
-  const toggleAgent = (clientId) => {
-    setClients(prev => prev.map(c => {
-      if (c.id === clientId) {
-        const next = !c.agentEnabled;
-        showToast(`AI Agent ${next ? 'ENABLED' : 'DISABLED'} for ${c.name}`);
-        return { ...c, agentEnabled: next };
+  const toggleAgent = async (clientId) => {
+    const clientToUpdate = clients.find(c => c.id === clientId);
+    if (!clientToUpdate) return;
+    
+    const nextStatus = !clientToUpdate.agent_enabled;
+    
+    // Optimistic UI update
+    setClients(prev => prev.map(c => c.id === clientId ? { ...c, agent_enabled: nextStatus } : c));
+    
+    try {
+      const res = await fetch(`${API_BASE}/api/clients/${clientId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agent_enabled: nextStatus })
+      });
+      if (res.ok) {
+        showToast(`AI Agent ${nextStatus ? 'ENABLED' : 'DISABLED'} for ${clientToUpdate.name}`);
+      } else {
+        // Revert on failure
+        setClients(prev => prev.map(c => c.id === clientId ? { ...c, agent_enabled: !nextStatus } : c));
+        showToast('Failed to update agent status', 'error');
       }
-      return c;
-    }));
+    } catch (err) {
+      setClients(prev => prev.map(c => c.id === clientId ? { ...c, agent_enabled: !nextStatus } : c));
+      showToast('Network error updating agent status', 'error');
+    }
   };
 
   useEffect(() => {
@@ -133,10 +150,19 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
 
   const handleUpdateClient = async (updatedClient) => {
     try {
+      // Map to exact database column names
+      const dbPayload = {
+        name: updatedClient.name,
+        email: updatedClient.email,
+        password: updatedClient.password,
+        whitelabel: updatedClient.whitelabel,
+        agent_enabled: updatedClient.agent_enabled !== undefined ? updatedClient.agent_enabled : updatedClient.agentEnabled
+      };
+      
       const res = await fetch(`${API_BASE}/api/clients/${updatedClient.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatedClient)
+        body: JSON.stringify(dbPayload)
       });
       const data = await res.json();
       if (data.success) {
@@ -254,10 +280,10 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
                       </div>
                       <div className="flex flex-col items-end gap-1">
                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide flex items-center gap-1 ${
-                          client.agentEnabled ? 'bg-[#ecfdf5] text-[#059669]' : 'bg-red-50 text-red-500'
+                          client.agent_enabled ? 'bg-[#ecfdf5] text-[#059669]' : 'bg-red-50 text-red-500'
                         }`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${client.agentEnabled ? 'bg-[#059669]' : 'bg-red-400'}`}></span>
-                          {client.agentEnabled ? 'AI Active' : 'AI Off'}
+                          <span className={`w-1.5 h-1.5 rounded-full ${client.agent_enabled ? 'bg-[#059669]' : 'bg-red-400'}`}></span>
+                          {client.agent_enabled ? 'AI Active' : 'AI Off'}
                         </span>
                         <span className="font-mono text-[9px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">{client.clientCode}</span>
                       </div>
@@ -297,7 +323,7 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
                         Settings
                       </button>
                       <button 
-                        onClick={() => onViewClient({ id: client.id, name: client.name, whitelabel: client.whitelabel, agentEnabled: client.agentEnabled, clientCode: client.clientCode })}
+                        onClick={() => onViewClient({ id: client.id, name: client.name, whitelabel: client.whitelabel, agentEnabled: client.agent_enabled, clientCode: client.clientCode })}
                         className="py-1.5 border border-[#e4e9f2] bg-[#f0f3f9] hover:bg-[#e4e9f2] rounded-lg text-xs font-semibold text-blue-600 transition-all flex items-center justify-center gap-1"
                       >
                         <Eye size={12} /> Login as
@@ -306,13 +332,13 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
                     <button 
                       onClick={() => toggleAgent(client.id)}
                       className={`w-full py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all border ${
-                        client.agentEnabled 
+                        client.agent_enabled 
                           ? 'bg-red-50 text-red-500 border-red-100 hover:bg-red-100' 
                           : 'bg-emerald-50 text-emerald-600 border-emerald-100 hover:bg-emerald-100'
                       }`}
                     >
-                      {client.agentEnabled ? <ToggleRight size={14}/> : <ToggleLeft size={14}/>}
-                      {client.agentEnabled ? 'Disable AI Agent' : 'Enable AI Agent'}
+                      {client.agent_enabled ? <ToggleRight size={14}/> : <ToggleLeft size={14}/>}
+                      {client.agent_enabled ? 'Disable AI Agent' : 'Enable AI Agent'}
                     </button>
                   </div>
                 ))}
