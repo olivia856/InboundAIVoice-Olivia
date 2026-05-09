@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Users, UserPlus, Activity, LogOut, Copy, Check, Eye, Settings, ToggleLeft, ToggleRight, CheckCircle, Zap, RefreshCw, Phone } from 'lucide-react';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://saas-backend.xqnsvk.easypanel.host';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://livekit-ai-azlon-olivia-va-backend.xqnsvk.easypanel.host';
 
 function genClientCode(existing) {
   const nums = existing.map(c => parseInt((c.clientCode || 'AZL-0000').split('-')[1] || '0'));
