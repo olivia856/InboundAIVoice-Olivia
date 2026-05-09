@@ -2151,12 +2151,12 @@ export default function App() {
     }
   };
 
-  const [portalClient, setPortalClient] = useState(null);
-  const [isPortalLoading, setIsPortalLoading] = useState(!!orgSlug);
-
   // Detect if this is a client portal URL (?org=slug)
   const urlParams = new URLSearchParams(window.location.search);
   const orgSlug = urlParams.get('org');
+
+  const [portalClient, setPortalClient] = useState(null);
+  const [isPortalLoading, setIsPortalLoading] = useState(!!orgSlug);
 
   useEffect(() => {
     if (orgSlug) {
