@@ -20,8 +20,9 @@ const toYYYYMMDD = (date) => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
-function ClientDashboard({ user, onLogout, onBackToAdmin }) {
+function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
   const [activePage, setActivePage] = useState('dashboard');
+  const [agentEnabled, setAgentEnabled] = useState(user?.agentEnabled !== false);
   const [twilioConfig, setTwilioConfig] = useState({ sid: '', api_key: '', phone: '' });
   const [uvConfig, setUVConfig] = useState({ api_key: '' });
   const [resendConfig, setResendConfig] = useState({ api_key: '' });
@@ -192,7 +193,7 @@ function ClientDashboard({ user, onLogout, onBackToAdmin }) {
     setTimeout(() => setToast(null), 3000);
   };
 
-  const isPortalClient = user?.role === 'client'; // logged in via ?org= URL
+  const isPortalClient = !!(user?.clientCode); // any client account (portal URL or Login as)
 
   const fetchAll = () => {
     // Portal clients have isolated fresh dashboards — only fetch if Twilio is configured
@@ -378,6 +379,9 @@ function ClientDashboard({ user, onLogout, onBackToAdmin }) {
                       }
                     }
                   } catch {}
+                  const newValue = agentToggleModal.action === 'enable';
+                  setAgentEnabled(newValue);
+                  if (onAgentToggle) onAgentToggle(newValue);
                   setAgentToggleModal(null);
                   showToast(agentToggleModal.action === 'pause' ? 'AI Agent paused.' : 'AI Agent enabled!');
                 }}
@@ -449,22 +453,22 @@ function ClientDashboard({ user, onLogout, onBackToAdmin }) {
           {user?.clientCode && (
             <div className="flex items-center justify-between bg-muted/30 rounded-xl px-3 py-2">
               <div className="flex items-center gap-2">
-                <span className={`w-2 h-2 rounded-full ${user?.agentEnabled !== false ? 'bg-emerald-500' : 'bg-red-400'}`} />
+                <span className={`w-2 h-2 rounded-full ${agentEnabled ? 'bg-emerald-500' : 'bg-red-400'}`} />
                 <span className="text-xs text-muted-foreground font-medium">
-                  {user?.agentEnabled !== false ? 'AI Agent Active' : 'AI Agent Paused'}
+                  {agentEnabled ? 'AI Agent Active' : 'AI Agent Paused'}
                 </span>
               </div>
               <button
                 onClick={() => {
-                  setAgentToggleModal({ action: user?.agentEnabled !== false ? 'pause' : 'enable' });
+                  setAgentToggleModal({ action: agentEnabled ? 'pause' : 'enable' });
                 }}
                 className={`text-[10px] font-bold px-2.5 py-1 rounded-lg transition-all ${
-                  user?.agentEnabled !== false
+                  agentEnabled
                     ? 'bg-red-500/10 text-red-500 hover:bg-red-500/20'
                     : 'bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20'
                 }`}
               >
-                {user?.agentEnabled !== false ? 'Pause' : 'Enable'}
+                {agentEnabled ? 'Pause' : 'Enable'}
               </button>
             </div>
           )}
@@ -2100,8 +2104,40 @@ function ClientDashboard({ user, onLogout, onBackToAdmin }) {
 }
 
 export default function App() {
-  const [authSession, setAuthSession] = useState(null);
-  const [viewingClient, setViewingClient] = useState(null);
+  const [authSession, setAuthSession] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem('azlon_auth');
+      return saved ? JSON.parse(saved) : null;
+    } catch { return null; }
+  });
+  const [viewingClient, setViewingClient] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem('azlon_viewing_client');
+      return saved ? JSON.parse(saved) : null;
+    } catch { return null; }
+  });
+
+  const saveSession = (session) => {
+    setAuthSession(session);
+    if (session) sessionStorage.setItem('azlon_auth', JSON.stringify(session));
+    else sessionStorage.removeItem('azlon_auth');
+  };
+
+  const saveViewingClient = (client) => {
+    setViewingClient(client);
+    if (client) sessionStorage.setItem('azlon_viewing_client', JSON.stringify(client));
+    else sessionStorage.removeItem('azlon_viewing_client');
+  };
+
+  const handleAgentToggle = (newValue) => {
+    if (viewingClient) {
+      const updated = { ...viewingClient, agentEnabled: newValue };
+      saveViewingClient(updated);
+    } else if (authSession) {
+      const updated = { ...authSession, agentEnabled: newValue };
+      saveSession(updated);
+    }
+  };
 
   // Detect if this is a client portal URL (?org=slug)
   const urlParams = new URLSearchParams(window.location.search);
@@ -2136,7 +2172,7 @@ export default function App() {
       return (
         <ClientPortalLogin
           client={portalClient}
-          onLoginSuccess={(session) => setAuthSession(session)}
+          onLoginSuccess={(session) => saveSession(session)}
         />
       );
     }
@@ -2145,23 +2181,24 @@ export default function App() {
     return (
       <ClientDashboard
         user={authSession}
-        onLogout={() => setAuthSession(null)}
+        onLogout={() => { saveSession(null); }}
         onBackToAdmin={undefined}
+        onAgentToggle={handleAgentToggle}
       />
     );
   }
 
   // SUPER ADMIN MODE — normal login
   if (!authSession) {
-    return <Login onLoginSuccess={(session) => setAuthSession(session)} />;
+    return <Login onLoginSuccess={(session) => saveSession(session)} />;
   }
 
   if (authSession.role === 'superadmin' && !viewingClient) {
     return (
       <SuperAdminDashboard
         user={authSession}
-        onLogout={() => setAuthSession(null)}
-        onViewClient={(client) => setViewingClient(client)}
+        onLogout={() => { saveSession(null); saveViewingClient(null); }}
+        onViewClient={(client) => saveViewingClient({ ...client, role: 'client' })}
       />
     );
   }
@@ -2169,11 +2206,9 @@ export default function App() {
   return (
     <ClientDashboard
       user={viewingClient || authSession}
-      onLogout={() => {
-        setAuthSession(null);
-        setViewingClient(null);
-      }}
-      onBackToAdmin={authSession.role === 'superadmin' ? () => setViewingClient(null) : undefined}
+      onLogout={() => { saveSession(null); saveViewingClient(null); }}
+      onBackToAdmin={authSession.role === 'superadmin' ? () => saveViewingClient(null) : undefined}
+      onAgentToggle={handleAgentToggle}
     />
   );
 }
