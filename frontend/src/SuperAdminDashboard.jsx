@@ -597,22 +597,32 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
                   </div>
                 </div>
 
-                {/* Twilio */}
+                {/* Amazon S3 */}
                 <div className="bg-white border border-[#e4e9f2] rounded-[14px] p-5 shadow-[0_1px_3px_rgba(15,23,42,0.06)]">
                   <div className="flex items-center gap-2 mb-4">
-                    <div className="w-8 h-8 rounded bg-red-100 flex items-center justify-center">
-                      <span className="text-red-600 font-bold font-serif">T</span>
+                    <div className="w-8 h-8 rounded bg-orange-100 flex items-center justify-center">
+                      <span className="text-orange-600 font-bold font-serif">S3</span>
                     </div>
-                    <h3 className="text-sm font-bold">Twilio (Telephony)</h3>
+                    <h3 className="text-sm font-bold">Amazon S3 (Storage)</h3>
                   </div>
                   <div className="space-y-3">
                     <div>
-                      <label className="text-[11px] font-semibold text-[#475569] uppercase tracking-[0.4px] mb-1.5 block">Account SID</label>
-                      <input type="text" className="w-full bg-[#f0f3f9] border border-[#e4e9f2] rounded-[10px] px-3 py-2.5 text-[13px] outline-none font-mono" placeholder="AC..." />
+                      <label className="text-[11px] font-semibold text-[#475569] uppercase tracking-[0.4px] mb-1.5 block">Access Key ID</label>
+                      <input type="text" className="w-full bg-[#f0f3f9] border border-[#e4e9f2] rounded-[10px] px-3 py-2.5 text-[13px] outline-none font-mono" placeholder="AKIA..." />
                     </div>
                     <div>
-                      <label className="text-[11px] font-semibold text-[#475569] uppercase tracking-[0.4px] mb-1.5 block">Auth Token</label>
+                      <label className="text-[11px] font-semibold text-[#475569] uppercase tracking-[0.4px] mb-1.5 block">Secret Access Key</label>
                       <input type="password" className="w-full bg-[#f0f3f9] border border-[#e4e9f2] rounded-[10px] px-3 py-2.5 text-[13px] outline-none font-mono" placeholder="••••••••••••" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[11px] font-semibold text-[#475569] uppercase tracking-[0.4px] mb-1.5 block">Bucket Name</label>
+                        <input type="text" className="w-full bg-[#f0f3f9] border border-[#e4e9f2] rounded-[10px] px-3 py-2.5 text-[13px] outline-none font-mono" placeholder="my-saas-recordings" />
+                      </div>
+                      <div>
+                        <label className="text-[11px] font-semibold text-[#475569] uppercase tracking-[0.4px] mb-1.5 block">Region</label>
+                        <input type="text" className="w-full bg-[#f0f3f9] border border-[#e4e9f2] rounded-[10px] px-3 py-2.5 text-[13px] outline-none font-mono" placeholder="us-east-1" />
+                      </div>
                     </div>
                   </div>
                 </div>
