@@ -1506,7 +1506,7 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                      if(!num) { showToast('Enter a phone number','error'); return; }
                      try {
                         showToast('Dispatching manual call...', 'success');
-                        const res = await fetch(`${API_BASE}/api/calls/outbound`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ toPhone: num, voice, goal }) });
+                        const res = await fetch(`${API_BASE}/api/calls/outbound`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ toPhone: num, voice, goal, client_id: (user?.client_code || user?.clientCode) }) });
                         const data = await res.json();
                         if(!data.success) { showToast(data.error || 'Dial failed.', 'error'); return; }
                         showToast('Call initiated successfully!', 'success');

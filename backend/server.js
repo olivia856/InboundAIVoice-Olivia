@@ -256,7 +256,7 @@ app.post('/api/twilio/inbound', async (req, res) => {
 
         // 0. Find the Client by Twilio Number
         const { data: client } = await supabase.from('clients').select('*').eq('phone', To).maybeSingle();
-        const clientId = client?.id || null; 
+        const clientId = client?.client_code || null; 
         
         if (!clientId) {
             console.log(`[Twilio Inbound] No specific client found for ${To}. Using platform default.`);
