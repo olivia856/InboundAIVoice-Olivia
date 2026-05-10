@@ -1968,9 +1968,20 @@ app.post('/api/campaigns/gsheet-launch', async (req, res) => {
 
 app.get('/api/reports', async (req, res) => {
     try {
-        const { data: calls } = await supabase.from('calls').select('*');
-        const { data: leads } = await supabase.from('leads').select('id');
-        const { data: apps } = await supabase.from('appointments').select('*');
+        const { client_id } = req.query;
+        let callsQuery = supabase.from('calls').select('*');
+        let leadsQuery = supabase.from('leads').select('id');
+        let appsQuery = supabase.from('appointments').select('*');
+        
+        if (client_id) {
+            callsQuery = callsQuery.eq('client_id', client_id);
+            leadsQuery = leadsQuery.eq('client_id', client_id);
+            appsQuery = appsQuery.eq('client_id', client_id);
+        }
+
+        const { data: calls } = await callsQuery;
+        const { data: leads } = await leadsQuery;
+        const { data: apps } = await appsQuery;
 
         const totalCalls = calls ? calls.length : 0;
         const totalDuration = calls ? calls.reduce((acc, c) => acc + parseInt(c.duration_seconds || 0), 0) : 0;
