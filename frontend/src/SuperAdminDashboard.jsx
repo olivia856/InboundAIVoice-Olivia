@@ -101,12 +101,25 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
 
   const handleSlugPreview = (name) => {
     setNewClient(prev => ({ ...prev, name }));
-    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
+    let baseSlug = (name || 'new-client').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
+    let slug = baseSlug;
+    let counter = 1;
+    while (clients.some(c => c.slug === slug)) {
+      slug = `${baseSlug}-${counter}`;
+      counter++;
+    }
     setSlugPreview(slug ? `https://livekit-ai-azlon-olivia-va-dashboard.xqnsvk.easypanel.host/?org=${slug}` : '');
   };
 
   const handleCreateClient = async () => {
-    const slug = newClient.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
+    let baseSlug = (newClient.name || 'new-client').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
+    let slug = baseSlug;
+    let counter = 1;
+    while (clients.some(c => c.slug === slug)) {
+      slug = `${baseSlug}-${counter}`;
+      counter++;
+    }
+    
     const clientCode = genClientCode(clients);
     
     const clientData = {
