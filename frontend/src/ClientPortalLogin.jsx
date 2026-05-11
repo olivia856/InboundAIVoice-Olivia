@@ -25,8 +25,8 @@ export default function ClientPortalLogin({ client, onLoginSuccess }) {
         id: client.id,
         name: client.name,
         whitelabel: client.whitelabel,
-        clientCode: client.clientCode,
-        agentEnabled: client.agentEnabled,
+        clientCode: client.client_code,
+        agentEnabled: client.agent_enabled,
         slug: client.slug
       });
     } else {
