@@ -26,6 +26,68 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
 
   const [platformStats, setPlatformStats] = useState({ totalCalls: 0, totalMins: 0, activeClients: 0, activeAgents: 0 });
 
+  // Platform Settings State
+  const [platformKeys, setPlatformKeys] = useState({
+    ultravox_key: '',
+    s3_access_key: '', s3_secret_key: '', s3_bucket: '', s3_region: 'us-east-1',
+    resend_key: ''
+  });
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+
+  const fetchPlatformSettings = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/platform-settings`);
+      const data = await res.json();
+      if (data.success && data.settings) {
+        const map = {};
+        data.settings.forEach(s => { map[s.provider] = s; });
+        setPlatformKeys({
+          ultravox_key: map.ultravox?.api_key || '',
+          s3_access_key: map.aws_s3?.meta_data?.access_key || '',
+          s3_secret_key: map.aws_s3?.api_key || '',
+          s3_bucket: map.aws_s3?.meta_data?.bucket || '',
+          s3_region: map.aws_s3?.meta_data?.region || 'us-east-1',
+          resend_key: map.resend?.api_key || ''
+        });
+      }
+    } catch(e) { console.error('Failed to load platform settings'); }
+    setSettingsLoaded(true);
+  };
+
+  const savePlatformSettings = async () => {
+    setIsSavingSettings(true);
+    try {
+      if (platformKeys.ultravox_key && !platformKeys.ultravox_key.startsWith('••')) {
+        await fetch(`${API_BASE}/api/platform-settings`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ provider: 'ultravox', api_key: platformKeys.ultravox_key })
+        });
+      }
+      if (platformKeys.s3_access_key && !platformKeys.s3_access_key.startsWith('••')) {
+        await fetch(`${API_BASE}/api/platform-settings`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            provider: 'aws_s3',
+            api_key: platformKeys.s3_secret_key,
+            meta_data: { access_key: platformKeys.s3_access_key, bucket: platformKeys.s3_bucket, region: platformKeys.s3_region }
+          })
+        });
+      }
+      if (platformKeys.resend_key && !platformKeys.resend_key.startsWith('••')) {
+        await fetch(`${API_BASE}/api/platform-settings`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ provider: 'resend', api_key: platformKeys.resend_key })
+        });
+      }
+      showToast('Platform settings saved successfully!');
+      fetchPlatformSettings(); // Refresh to get masked keys
+    } catch (err) {
+      showToast('Failed to save settings', 'error');
+    }
+    setIsSavingSettings(false);
+  };
+
   const fetchPlatformStats = async () => {
     try {
       const res = await fetch(`${API_BASE}/api/admin/stats`);
@@ -90,6 +152,7 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
     
     fetchClients();
     fetchPlatformStats();
+    fetchPlatformSettings();
     const interval = setInterval(fetchPlatformStats, 30000);
     return () => clearInterval(interval);
   }, []);
@@ -566,75 +629,7 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
           )}
 
           {/* PLATFORM SETTINGS VIEW */}
-          {activeTab === 'settings' && (() => {
-            const [platformKeys, setPlatformKeys] = useState({
-              ultravox_key: '',
-              s3_access_key: '', s3_secret_key: '', s3_bucket: '', s3_region: 'us-east-1',
-              resend_key: ''
-            });
-            const [isSaving, setIsSaving] = useState(false);
-            const [loaded, setLoaded] = useState(false);
-
-            useEffect(() => {
-              if (loaded) return;
-              (async () => {
-                try {
-                  const res = await fetch(`${API_BASE}/api/platform-settings`);
-                  const data = await res.json();
-                  if (data.success && data.settings) {
-                    const map = {};
-                    data.settings.forEach(s => { map[s.provider] = s; });
-                    setPlatformKeys(prev => ({
-                      ...prev,
-                      ultravox_key: map.ultravox?.api_key || '',
-                      s3_access_key: map.aws_s3?.meta_data?.access_key || '',
-                      s3_secret_key: map.aws_s3?.api_key || '',
-                      s3_bucket: map.aws_s3?.meta_data?.bucket || '',
-                      s3_region: map.aws_s3?.meta_data?.region || 'us-east-1',
-                      resend_key: map.resend?.api_key || ''
-                    }));
-                  }
-                } catch(e) { console.error('Failed to load platform settings'); }
-                setLoaded(true);
-              })();
-            }, [loaded]);
-
-            const savePlatformSettings = async () => {
-              setIsSaving(true);
-              try {
-                // Save Ultravox
-                if (platformKeys.ultravox_key && !platformKeys.ultravox_key.startsWith('••')) {
-                  await fetch(`${API_BASE}/api/platform-settings`, {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ provider: 'ultravox', api_key: platformKeys.ultravox_key })
-                  });
-                }
-                // Save S3
-                if (platformKeys.s3_access_key && !platformKeys.s3_access_key.startsWith('••')) {
-                  await fetch(`${API_BASE}/api/platform-settings`, {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      provider: 'aws_s3',
-                      api_key: platformKeys.s3_secret_key,
-                      meta_data: { access_key: platformKeys.s3_access_key, bucket: platformKeys.s3_bucket, region: platformKeys.s3_region }
-                    })
-                  });
-                }
-                // Save Resend
-                if (platformKeys.resend_key && !platformKeys.resend_key.startsWith('••')) {
-                  await fetch(`${API_BASE}/api/platform-settings`, {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ provider: 'resend', api_key: platformKeys.resend_key })
-                  });
-                }
-                showToast('Platform settings saved successfully!');
-              } catch (err) {
-                showToast('Failed to save settings', 'error');
-              }
-              setIsSaving(false);
-            };
-
-            return (
+          {activeTab === 'settings' && (
             <div>
               <div className="flex items-center justify-between mb-5">
                 <h2 className="text-lg font-bold tracking-tight">Platform Engine Settings</h2>
@@ -711,9 +706,9 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
                   </div>
                 </div>
 
-                <button onClick={savePlatformSettings} disabled={isSaving}
+                <button onClick={savePlatformSettings} disabled={isSavingSettings}
                   className="bg-blue-600 hover:bg-[#1e40af] text-white px-4 py-2.5 rounded-[10px] text-[13px] font-semibold transition-all w-full mt-2 disabled:opacity-50">
-                  {isSaving ? 'Saving...' : 'Save Platform Settings'}
+                  {isSavingSettings ? 'Saving...' : 'Save Platform Settings'}
                 </button>
 
                 <p className="text-[11px] text-[#94a3b8] text-center mt-2">
@@ -721,8 +716,7 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
                 </p>
               </div>
             </div>
-            );
-          })()}
+          )}
 
         </div>
 
