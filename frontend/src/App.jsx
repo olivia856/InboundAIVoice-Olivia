@@ -152,6 +152,25 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
     } catch (e) { showToast('Update failed.', 'error'); }
     setIsSavingResend(false);
   };
+
+  const saveElevenLabsConfig = async (e) => {
+    e.preventDefault();
+    setIsSavingElevenLabs(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/integrations/elevenlabs`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          api_key: elevenLabsConfig.api_key, 
+          meta_data: { voice_id: elevenLabsConfig.voice_id },
+          client_id: (user?.client_code || user?.clientCode) 
+        })
+      });
+      const data = await res.json();
+      if (data.success) { showToast('ElevenLabs integration saved!', 'success'); } else { showToast('Failed to save ElevenLabs.', 'error'); }
+    } catch (e) { showToast('Error saving ElevenLabs.', 'error'); }
+    setIsSavingElevenLabs(false);
+  };
   const [theme, setTheme] = useState('light');
   const [toast, setToast] = useState(null);
 

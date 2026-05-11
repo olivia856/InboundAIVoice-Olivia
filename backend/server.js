@@ -1792,7 +1792,8 @@ app.post('/api/integrations/twilio', async (req, res) => {
 // --- RESEND INTEGRATION ---
 app.get('/api/integrations/resend', async (req, res) => {
     try {
-        const { data, error } = await supabase.from('integrations').select('*').eq('provider', 'resend').single();
+        const { client_id } = req.query;
+        const { data, error } = await supabase.from('integrations').select('*').eq('provider', 'resend').eq('client_id', client_id).maybeSingle();
         if (error && error.code !== 'PGRST116') throw error;
         if (!data) return res.json({ success: true, integration: null });
         const masked = {
@@ -1804,10 +1805,10 @@ app.get('/api/integrations/resend', async (req, res) => {
 
 app.post('/api/integrations/resend', async (req, res) => {
     try {
-        const { api_key } = req.body;
+        const { api_key, client_id } = req.body;
         if (!api_key) return res.status(400).json({ error: "Missing API Key" });
 
-        const { data: existing } = await supabase.from('integrations').select('*').eq('provider', 'resend').single();
+        const { data: existing } = await supabase.from('integrations').select('*').eq('provider', 'resend').eq('client_id', client_id).maybeSingle();
         
         let finalApiKey = api_key.trim();
         if (finalApiKey.includes('****')) {
@@ -1816,10 +1817,11 @@ app.post('/api/integrations/resend', async (req, res) => {
 
         const payload = { 
             provider: 'resend', 
-            api_key: finalApiKey
+            api_key: finalApiKey,
+            client_id
         };
         
-        const { error: revErr } = await supabase.from('integrations').upsert(payload, { onConflict: 'provider' });
+        const { error: revErr } = await supabase.from('integrations').upsert(payload, { onConflict: 'provider, client_id' });
 
         if (revErr) return res.status(500).json({ error: revErr.message });
         res.json({ success: true, message: "Resend integration updated." });
@@ -1829,7 +1831,8 @@ app.post('/api/integrations/resend', async (req, res) => {
 // --- ULTRAVOX INTEGRATION ---
 app.get('/api/integrations/ultravox', async (req, res) => {
     try {
-        const { data, error } = await supabase.from('integrations').select('*').eq('provider', 'ultravox').single();
+        const { client_id } = req.query;
+        const { data, error } = await supabase.from('integrations').select('*').eq('provider', 'ultravox').eq('client_id', client_id).maybeSingle();
         if (error && error.code !== 'PGRST116') throw error;
         if (!data) return res.json({ success: true, integration: null });
         const masked = {
@@ -1841,10 +1844,10 @@ app.get('/api/integrations/ultravox', async (req, res) => {
 
 app.post('/api/integrations/ultravox', async (req, res) => {
     try {
-        const { api_key } = req.body;
+        const { api_key, client_id } = req.body;
         if (!api_key) return res.status(400).json({ error: "Missing API Key" });
 
-        const { data: existing } = await supabase.from('integrations').select('*').eq('provider', 'ultravox').single();
+        const { data: existing } = await supabase.from('integrations').select('*').eq('provider', 'ultravox').eq('client_id', client_id).maybeSingle();
         
         let finalApiKey = api_key.trim();
         if (finalApiKey.includes('****')) {
@@ -1853,14 +1856,56 @@ app.post('/api/integrations/ultravox', async (req, res) => {
 
         const payload = { 
             provider: 'ultravox', 
-            api_key: finalApiKey
+            api_key: finalApiKey,
+            client_id
         };
         
-        const { error: uvErr } = await supabase.from('integrations').upsert(payload, { onConflict: 'provider' });
+        const { error: uvErr } = await supabase.from('integrations').upsert(payload, { onConflict: 'provider, client_id' });
 
         if (uvErr) return res.status(500).json({ error: uvErr.message });
         res.json({ success: true, message: "Ultravox integration updated." });
     } catch(err) { res.status(500).json({ error: "Failed to save integration" }); }
+});
+
+// --- ELEVENLABS INTEGRATION ---
+app.get('/api/integrations/elevenlabs', async (req, res) => {
+    try {
+        const { client_id } = req.query;
+        const { data, error } = await supabase.from('integrations').select('*').eq('provider', 'elevenlabs').eq('client_id', client_id).maybeSingle();
+        if (error && error.code !== 'PGRST116') throw error;
+        if (!data) return res.json({ success: true, integration: null });
+        const masked = {
+            api_key: data.api_key ? (data.api_key.substring(0, 4) + '****************' + data.api_key.substring(data.api_key.length - 4)) : '',
+            meta_data: data.meta_data || {}
+        };
+        res.json({ success: true, integration: masked });
+    } catch(err) { res.status(500).json({ error: "Failed to fetch ElevenLabs integration" }); }
+});
+
+app.post('/api/integrations/elevenlabs', async (req, res) => {
+    try {
+        const { api_key, meta_data, client_id } = req.body;
+        if (!api_key) return res.status(400).json({ error: "Missing API Key" });
+
+        const { data: existing } = await supabase.from('integrations').select('*').eq('provider', 'elevenlabs').eq('client_id', client_id).maybeSingle();
+        
+        let finalApiKey = api_key.trim();
+        if (finalApiKey.includes('****')) {
+            finalApiKey = existing?.api_key || finalApiKey;
+        }
+
+        const payload = { 
+            provider: 'elevenlabs', 
+            api_key: finalApiKey,
+            meta_data: meta_data || {},
+            client_id
+        };
+        
+        const { error: elErr } = await supabase.from('integrations').upsert(payload, { onConflict: 'provider, client_id' });
+
+        if (elErr) return res.status(500).json({ error: elErr.message });
+        res.json({ success: true, message: "ElevenLabs integration updated." });
+    } catch(err) { res.status(500).json({ error: "Failed to save ElevenLabs integration" }); }
 });
 
 
