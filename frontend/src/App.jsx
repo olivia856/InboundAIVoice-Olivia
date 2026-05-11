@@ -2226,7 +2226,7 @@ export default function App() {
       <SuperAdminDashboard
         user={authSession}
         onLogout={() => { saveSession(null); saveViewingClient(null); }}
-        onViewClient={(client) => saveViewingClient({ ...client, role: 'client' })}
+        onViewClient={(client) => saveViewingClient({ ...client, role: 'client', client_code: client.client_code || client.clientCode, clientCode: client.client_code || client.clientCode })}
       />
     );
   }
