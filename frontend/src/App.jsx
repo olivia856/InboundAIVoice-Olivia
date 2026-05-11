@@ -25,9 +25,11 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
   const [agentEnabled, setAgentEnabled] = useState(user?.agentEnabled !== false);
   const [twilioConfig, setTwilioConfig] = useState({ sid: '', api_key: '', phone: '' });
   const [uvConfig, setUVConfig] = useState({ api_key: '' });
+  const [elevenLabsConfig, setElevenLabsConfig] = useState({ api_key: '', voice_id: '' });
   const [resendConfig, setResendConfig] = useState({ api_key: '' });
   const [isSavingCreds, setIsSavingCreds] = useState(false);
   const [isSavingUV, setIsSavingUV] = useState(false);
+  const [isSavingElevenLabs, setIsSavingElevenLabs] = useState(false);
   const [isSavingResend, setIsSavingResend] = useState(false);
 
   const fetchTwilioConfig = async () => {
@@ -54,11 +56,22 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
     } catch (e) { }
   };
 
+  const fetchElevenLabsConfig = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/integrations/elevenlabs?client_id=${(user?.client_code || user?.clientCode)}`);
+      const data = await res.json();
+      if (data.success && data.integration) {
+        setElevenLabsConfig({ api_key: data.integration.api_key, voice_id: data.integration.meta_data?.voice_id || '' });
+      }
+    } catch (e) { }
+  };
+
 
   useEffect(() => {
     if (activePage === 'credentials') {
       fetchTwilioConfig();
       fetchUVConfig();
+      fetchElevenLabsConfig();
       fetchResendConfig();
     }
   }, [activePage]);
@@ -1017,12 +1030,21 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                   <div>
                     <label className="block text-xs font-bold text-muted-foreground uppercase mb-2">Voice Model</label>
                     <select name="voice" defaultValue={agentSettings.voice_preset} className="w-full bg-background border border-border rounded-lg p-3 text-sm outline-none">
-                      <option value="Mark">🇺🇸 Mark (Standard Male)</option>
-                      <option value="Alice">🇺🇸 Alice (Professional Female)</option>
-                      <option value="Jessica">🇺🇸 Jessica (Warm Female)</option>
-                      <option value="Kelsey">🇬🇧 Kelsey (Soft British Female)</option>
-                      <option value="Priya">🇮🇳 Priya (Clear Indian Female)</option>
-                      <option value="Lulu">🌍 Lulu (Casual Female)</option>
+                      <optgroup label="Standard Ultravox Voices">
+                        <option value="mark">🇺🇸 Mark (Male, Professional)</option>
+                        <option value="terrence">🇺🇸 Terrence (Male, Deep)</option>
+                        <option value="alex">🇺🇸 Alex (Male, Friendly)</option>
+                        <option value="jessica">🇺🇸 Jessica (Female, Warm)</option>
+                        <option value="lily">🇺🇸 Lily (Female, Professional)</option>
+                        <option value="sarah">🇺🇸 Sarah (Female, Conversational)</option>
+                        <option value="david">🇬🇧 David (Male, British)</option>
+                        <option value="emily">🇬🇧 Emily (Female, British)</option>
+                        <option value="ryan">🇺🇸 Ryan (Male, Energetic)</option>
+                        <option value="emma">🇺🇸 Emma (Female, Energetic)</option>
+                      </optgroup>
+                      <optgroup label="Custom Integration">
+                        <option value="elevenlabs:custom">🎙️ My Custom ElevenLabs Voice</option>
+                      </optgroup>
                     </select>
                   </div>
                   <div>
@@ -1478,12 +1500,21 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
               <div className="grid grid-cols-2 gap-4">
                 <input name="campaign_name" placeholder="Campaign Name (e.g. Past Clients Follow-up)" className="w-full bg-background border border-border p-3 rounded-lg text-sm outline-none" required />
                 <select name="campaign_voice" className="w-full bg-background border border-border p-3 rounded-lg text-sm outline-none">
-                  <option value="Mark">🇺🇸 Mark (Standard Male)</option>
-                  <option value="Alice">🇺🇸 Alice (Professional Female)</option>
-                  <option value="Jessica">🇺🇸 Jessica (Warm Female)</option>
-                  <option value="Kelsey">🇬🇧 Kelsey (Soft British Female)</option>
-                  <option value="Priya">🇮🇳 Priya (Clear Indian Female)</option>
-                  <option value="Lulu">🌍 Lulu (Casual Female)</option>
+                  <optgroup label="Standard Ultravox Voices">
+                    <option value="mark">🇺🇸 Mark (Male, Professional)</option>
+                    <option value="terrence">🇺🇸 Terrence (Male, Deep)</option>
+                    <option value="alex">🇺🇸 Alex (Male, Friendly)</option>
+                    <option value="jessica">🇺🇸 Jessica (Female, Warm)</option>
+                    <option value="lily">🇺🇸 Lily (Female, Professional)</option>
+                    <option value="sarah">🇺🇸 Sarah (Female, Conversational)</option>
+                    <option value="david">🇬🇧 David (Male, British)</option>
+                    <option value="emily">🇬🇧 Emily (Female, British)</option>
+                    <option value="ryan">🇺🇸 Ryan (Male, Energetic)</option>
+                    <option value="emma">🇺🇸 Emma (Female, Energetic)</option>
+                  </optgroup>
+                  <optgroup label="Custom Integration">
+                    <option value="elevenlabs:custom">🎙️ My Custom ElevenLabs Voice</option>
+                  </optgroup>
                 </select>
               </div>
               
@@ -1845,6 +1876,31 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                 <div className="pt-2">
                   <button type="submit" disabled={isSavingUV} className="w-full bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/30 font-bold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2">
                     {isSavingUV ? 'Saving...' : 'Update AI Provider Key'}
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            {/* --- ELEVENLABS CONFIG --- */}
+            <div className="bg-card border border-border rounded-2xl p-8 shadow-premium-lg">
+              <h3 className="text-sm font-bold uppercase tracking-widest mb-6 flex items-center gap-2">
+                <span className="text-xl leading-none font-black text-gray-800 dark:text-gray-200">II</span> ElevenLabs Custom Voice
+              </h3>
+              <p className="text-xs text-muted-foreground mb-5 leading-relaxed">
+                Connect your ElevenLabs account to use your own custom voice clones. Enter your API key and the Voice ID of your favorite voice.
+              </p>
+              <form onSubmit={saveElevenLabsConfig} className="space-y-5">
+                <div>
+                  <label className="block text-[10px] font-bold text-muted-foreground uppercase tracking-ultra mb-2">ElevenLabs API Key</label>
+                  <input type="password" value={elevenLabsConfig.api_key} onChange={(e) => setElevenLabsConfig({...elevenLabsConfig, api_key: e.target.value})} placeholder="sk_..." className="w-full bg-background border border-border p-3 rounded-xl text-sm outline-none focus:border-primary transition-all font-mono" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-muted-foreground uppercase tracking-ultra mb-2">ElevenLabs Voice ID</label>
+                  <input type="text" value={elevenLabsConfig.voice_id} onChange={(e) => setElevenLabsConfig({...elevenLabsConfig, voice_id: e.target.value})} placeholder="pNInz6obbf5AWCGqe..." className="w-full bg-background border border-border p-3 rounded-xl text-sm outline-none focus:border-primary transition-all font-mono" />
+                </div>
+                <div className="pt-2">
+                  <button type="submit" disabled={isSavingElevenLabs} className="w-full bg-gray-500/10 hover:bg-gray-500/20 text-gray-700 dark:text-gray-300 border border-gray-500/30 font-bold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2">
+                    {isSavingElevenLabs ? 'Saving...' : 'Update ElevenLabs Keys'}
                   </button>
                 </div>
               </form>

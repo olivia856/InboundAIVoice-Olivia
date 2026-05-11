@@ -539,6 +539,20 @@ app.post('/api/twilio/inbound', async (req, res) => {
             });
         }
 
+        let apiKeysObj = undefined;
+        let finalUltravoxVoice = finalVoice;
+        
+        if (finalVoice === 'elevenlabs:custom') {
+            const { data: elInt } = await supabase.from('integrations').select('*').eq('provider', 'elevenlabs').eq('client_id', clientId).maybeSingle();
+            if (elInt && elInt.api_key && elInt.meta_data?.voice_id) {
+                finalUltravoxVoice = `elevenlabs:${elInt.meta_data.voice_id}`;
+                apiKeysObj = { elevenlabs: elInt.api_key };
+            } else {
+                console.warn("[Ultravox] ElevenLabs selected but no valid integration found. Falling back to default.");
+                finalUltravoxVoice = "terrence";
+            }
+        }
+
         const uvResponse = await fetch('https://api.ultravox.ai/api/calls', {
             method: 'POST',
             headers: {
@@ -547,11 +561,12 @@ app.post('/api/twilio/inbound', async (req, res) => {
             },
             body: JSON.stringify({
                 systemPrompt: finalPrompt,
-                voice: finalVoice,
+                voice: finalUltravoxVoice,
                 temperature: agentData?.temperature || 0.3,
                 firstSpeaker: "FIRST_SPEAKER_AGENT",
                 medium: { twilio: {} },
-                selectedTools: selectedTools
+                selectedTools: selectedTools,
+                ...(apiKeysObj ? { apiKeys: apiKeysObj } : {})
             })
         });
 
@@ -897,6 +912,20 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
             });
         }
 
+        let apiKeysObj = undefined;
+        let finalUltravoxVoice = finalVoice;
+        
+        if (finalVoice === 'elevenlabs:custom') {
+            const { data: elInt } = await supabase.from('integrations').select('*').eq('provider', 'elevenlabs').eq('client_id', client_id).maybeSingle();
+            if (elInt && elInt.api_key && elInt.meta_data?.voice_id) {
+                finalUltravoxVoice = `elevenlabs:${elInt.meta_data.voice_id}`;
+                apiKeysObj = { elevenlabs: elInt.api_key };
+            } else {
+                console.warn("[Ultravox] ElevenLabs selected but no valid integration found. Falling back to default.");
+                finalUltravoxVoice = "terrence";
+            }
+        }
+
         const uvResponse = await fetch('https://api.ultravox.ai/api/calls', {
             method: 'POST',
             headers: {
@@ -905,11 +934,12 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
             },
             body: JSON.stringify({
                 systemPrompt: finalPrompt,
-                voice: finalVoice,
+                voice: finalUltravoxVoice,
                 temperature: agentData?.temperature || 0.3,
                 firstSpeaker: "FIRST_SPEAKER_AGENT",
                 medium: { twilio: {} },
-                selectedTools: selectedTools
+                selectedTools: selectedTools,
+                ...(apiKeysObj ? { apiKeys: apiKeysObj } : {})
             })
         });
 
