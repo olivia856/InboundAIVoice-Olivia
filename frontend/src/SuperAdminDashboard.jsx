@@ -250,7 +250,13 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
   };
 
   const handleDeleteClient = async (clientId, clientCode) => {
-    if (!window.confirm(`WARNING: Are you sure you want to permanently delete the dashboard for ${clientCode}? This will erase all their settings, integrations, calls, and leads.`)) return;
+    const password = window.prompt(`WARNING: You are about to permanently delete the dashboard for ${clientCode}.\nThis will erase all settings, integrations, calls, and leads.\n\nTo confirm, please enter the client's current password:`);
+    
+    if (password === null) return; // User clicked Cancel
+    if (password !== editingClient.password) {
+      showToast('Incorrect password. Deletion cancelled.', 'error');
+      return;
+    }
     
     try {
       const res = await fetch(`${API_BASE}/api/clients/${clientId}`, {
