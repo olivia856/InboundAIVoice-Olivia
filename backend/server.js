@@ -35,20 +35,26 @@ let finalDbKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsI
 const supabase = createClient(finalDbUrl, finalDbKey);
 // --- AWS S3 NOTIFICATION ENGINE ---
 async function getS3Client() {
+    // Check platform settings first, then client integrations, then env vars
+    const { data: platformS3 } = await supabase.from('platform_settings').select('*').eq('provider', 'aws_s3').maybeSingle();
     const { data: awsInt } = await supabase.from('integrations').select('*').eq('provider', 'aws_s3').maybeSingle();
-    const region = awsInt?.meta_data?.region || process.env.AWS_REGION || 'us-east-1';
-    const accessKeyId = awsInt?.meta_data?.access_key || process.env.AWS_ACCESS_KEY_ID;
-    const secretAccessKey = awsInt?.api_key || process.env.AWS_SECRET_ACCESS_KEY;
+    
+    const region = platformS3?.meta_data?.region || awsInt?.meta_data?.region || process.env.AWS_REGION || 'us-east-1';
+    const accessKeyId = platformS3?.meta_data?.access_key || awsInt?.meta_data?.access_key || process.env.AWS_ACCESS_KEY_ID;
+    const secretAccessKey = platformS3?.api_key || awsInt?.api_key || process.env.AWS_SECRET_ACCESS_KEY;
+    const bucketName = platformS3?.meta_data?.bucket || awsInt?.meta_data?.bucket || process.env.AWS_S3_BUCKET;
 
     if (!accessKeyId || !secretAccessKey) return null;
 
-    return new S3Client({
+    const client = new S3Client({
         region,
         credentials: {
             accessKeyId,
             secretAccessKey
         }
     });
+    client._bucketName = bucketName; // attach for convenience
+    return client;
 }
 
 // --- OMNICHANNEL NOTIFICATIONS ENGINE ---
@@ -190,6 +196,70 @@ async function dispatchOmnichannel(appointmentId, name, phone, email, templateTy
 }
 // --- END OMNICHANNEL ENGINE ---
 
+// --- PLATFORM SETTINGS (Master API Keys) ---
+// Helper: Get a platform-level key by provider name
+async function getPlatformKey(provider) {
+    const { data } = await supabase
+        .from('platform_settings')
+        .select('*')
+        .eq('provider', provider)
+        .maybeSingle();
+    return data;
+}
+
+// GET all platform settings
+app.get('/api/platform-settings', async (req, res) => {
+    try {
+        const { data, error } = await supabase.from('platform_settings').select('*');
+        if (error) throw error;
+        // Mask sensitive keys for display
+        const masked = (data || []).map(s => ({
+            ...s,
+            api_key: s.api_key ? '••••••' + s.api_key.slice(-4) : '',
+        }));
+        res.json({ success: true, settings: masked });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// POST save/update a platform setting
+app.post('/api/platform-settings', async (req, res) => {
+    try {
+        const { provider, api_key, meta_data } = req.body;
+        if (!provider) return res.status(400).json({ success: false, error: 'Provider is required' });
+
+        // Upsert: update if exists, insert if not
+        const { data: existing } = await supabase
+            .from('platform_settings')
+            .select('id')
+            .eq('provider', provider)
+            .maybeSingle();
+
+        let result;
+        if (existing) {
+            const updatePayload = {};
+            if (api_key) updatePayload.api_key = api_key;
+            if (meta_data) updatePayload.meta_data = meta_data;
+            updatePayload.updated_at = new Date().toISOString();
+            result = await supabase.from('platform_settings').update(updatePayload).eq('id', existing.id).select().single();
+        } else {
+            result = await supabase.from('platform_settings').insert({
+                provider,
+                api_key: api_key || '',
+                meta_data: meta_data || {},
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+            }).select().single();
+        }
+
+        if (result.error) throw result.error;
+        res.json({ success: true, setting: result.data });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 // Inbound webhook from Twilio
 // --- CLIENT MANAGEMENT (MULTI-TENANCY) ---
 app.get('/api/clients', async (req, res) => {
@@ -264,7 +334,8 @@ app.post('/api/twilio/inbound', async (req, res) => {
 
         // 1. Fetch Integration Keys from Database
         const { data: uvInt } = await supabase.from('integrations').select('*').eq('provider', 'ultravox').eq('client_id', clientId).maybeSingle();
-        const ACTIVE_ULTRAVOX_KEY = uvInt?.api_key || process.env.ULTRAVOX_API_KEY;
+        const platformUV = await getPlatformKey('ultravox');
+        const ACTIVE_ULTRAVOX_KEY = uvInt?.api_key || platformUV?.api_key || process.env.ULTRAVOX_API_KEY;
 
         if (!ACTIVE_ULTRAVOX_KEY) {
             console.error("Ultravox API key is completely missing. Add it in the Dashboard's API Credentials page.");
@@ -629,8 +700,9 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
         const { toPhone, voice: reqVoice, goal: reqGoal, name: reqName, client_id } = req.query;
 
         // 1. Fetch Ultravox Key
-        const { data: uvInt } = await supabase.from('integrations').select('*').eq('provider', 'ultravox').eq('client_id', client_id).single();
-        const ACTIVE_ULTRAVOX_KEY = uvInt?.api_key || process.env.ULTRAVOX_API_KEY;
+        const { data: uvInt } = await supabase.from('integrations').select('*').eq('provider', 'ultravox').eq('client_id', client_id).maybeSingle();
+        const platformUV2 = await getPlatformKey('ultravox');
+        const ACTIVE_ULTRAVOX_KEY = uvInt?.api_key || platformUV2?.api_key || process.env.ULTRAVOX_API_KEY;
 
         if (!ACTIVE_ULTRAVOX_KEY) return res.status(500).send('<Response><Say>AI Key Error</Say></Response>');
 
@@ -1059,8 +1131,9 @@ app.post('/api/twilio/status', async (req, res) => {
                 if (!callRow || !callRow.ultravox_call_id) return;
 
                 // Fetch Key
-                const { data: uvInt } = await supabase.from('integrations').select('*').eq('provider', 'ultravox').eq('client_id', callRow.client_id).single();
-                const ACTIVE_ULTRAVOX_KEY = uvInt?.api_key || process.env.ULTRAVOX_API_KEY;
+                const { data: uvInt } = await supabase.from('integrations').select('*').eq('provider', 'ultravox').eq('client_id', callRow.client_id).maybeSingle();
+                const platformUV3 = await getPlatformKey('ultravox');
+                const ACTIVE_ULTRAVOX_KEY = uvInt?.api_key || platformUV3?.api_key || process.env.ULTRAVOX_API_KEY;
 
                 // Fetch data from Ultravox
                 const uvRes = await fetch(`https://api.ultravox.ai/api/calls/${callRow.ultravox_call_id}`, {

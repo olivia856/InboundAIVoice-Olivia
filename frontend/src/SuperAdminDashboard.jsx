@@ -566,7 +566,75 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
           )}
 
           {/* PLATFORM SETTINGS VIEW */}
-          {activeTab === 'settings' && (
+          {activeTab === 'settings' && (() => {
+            const [platformKeys, setPlatformKeys] = useState({
+              ultravox_key: '',
+              s3_access_key: '', s3_secret_key: '', s3_bucket: '', s3_region: 'us-east-1',
+              resend_key: ''
+            });
+            const [isSaving, setIsSaving] = useState(false);
+            const [loaded, setLoaded] = useState(false);
+
+            useEffect(() => {
+              if (loaded) return;
+              (async () => {
+                try {
+                  const res = await fetch(`${API_BASE}/api/platform-settings`);
+                  const data = await res.json();
+                  if (data.success && data.settings) {
+                    const map = {};
+                    data.settings.forEach(s => { map[s.provider] = s; });
+                    setPlatformKeys(prev => ({
+                      ...prev,
+                      ultravox_key: map.ultravox?.api_key || '',
+                      s3_access_key: map.aws_s3?.meta_data?.access_key || '',
+                      s3_secret_key: map.aws_s3?.api_key || '',
+                      s3_bucket: map.aws_s3?.meta_data?.bucket || '',
+                      s3_region: map.aws_s3?.meta_data?.region || 'us-east-1',
+                      resend_key: map.resend?.api_key || ''
+                    }));
+                  }
+                } catch(e) { console.error('Failed to load platform settings'); }
+                setLoaded(true);
+              })();
+            }, [loaded]);
+
+            const savePlatformSettings = async () => {
+              setIsSaving(true);
+              try {
+                // Save Ultravox
+                if (platformKeys.ultravox_key && !platformKeys.ultravox_key.startsWith('••')) {
+                  await fetch(`${API_BASE}/api/platform-settings`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ provider: 'ultravox', api_key: platformKeys.ultravox_key })
+                  });
+                }
+                // Save S3
+                if (platformKeys.s3_access_key && !platformKeys.s3_access_key.startsWith('••')) {
+                  await fetch(`${API_BASE}/api/platform-settings`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      provider: 'aws_s3',
+                      api_key: platformKeys.s3_secret_key,
+                      meta_data: { access_key: platformKeys.s3_access_key, bucket: platformKeys.s3_bucket, region: platformKeys.s3_region }
+                    })
+                  });
+                }
+                // Save Resend
+                if (platformKeys.resend_key && !platformKeys.resend_key.startsWith('••')) {
+                  await fetch(`${API_BASE}/api/platform-settings`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ provider: 'resend', api_key: platformKeys.resend_key })
+                  });
+                }
+                showToast('Platform settings saved successfully!');
+              } catch (err) {
+                showToast('Failed to save settings', 'error');
+              }
+              setIsSaving(false);
+            };
+
+            return (
             <div>
               <div className="flex items-center justify-between mb-5">
                 <h2 className="text-lg font-bold tracking-tight">Platform Engine Settings</h2>
@@ -576,26 +644,6 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
               </p>
               
               <div className="space-y-4 max-w-[600px]">
-                {/* Supabase */}
-                <div className="bg-white border border-[#e4e9f2] rounded-[14px] p-5 shadow-[0_1px_3px_rgba(15,23,42,0.06)]">
-                  <div className="flex items-center gap-2 mb-4">
-                    <div className="w-8 h-8 rounded bg-emerald-100 flex items-center justify-center">
-                      <img src="https://supabase.com/favicon/favicon-32x32.png" alt="Supabase" className="w-4 h-4 opacity-70 grayscale" onError={(e) => e.target.style.display='none'} />
-                    </div>
-                    <h3 className="text-sm font-bold">Supabase (Database)</h3>
-                  </div>
-                  <div className="space-y-3">
-                    <div>
-                      <label className="text-[11px] font-semibold text-[#475569] uppercase tracking-[0.4px] mb-1.5 block">Project URL</label>
-                      <input type="text" className="w-full bg-[#f0f3f9] border border-[#e4e9f2] rounded-[10px] px-3 py-2.5 text-[13px] outline-none font-mono" placeholder="https://xxxx.supabase.co" defaultValue="https://qhqmljwexivhvxzfklum.supabase.co" />
-                    </div>
-                    <div>
-                      <label className="text-[11px] font-semibold text-[#475569] uppercase tracking-[0.4px] mb-1.5 block">Anon / Public Key</label>
-                      <input type="password" className="w-full bg-[#f0f3f9] border border-[#e4e9f2] rounded-[10px] px-3 py-2.5 text-[13px] outline-none font-mono" placeholder="eyJ..." defaultValue="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." />
-                    </div>
-                  </div>
-                </div>
-
                 {/* Ultravox */}
                 <div className="bg-white border border-[#e4e9f2] rounded-[14px] p-5 shadow-[0_1px_3px_rgba(15,23,42,0.06)]">
                   <div className="flex items-center gap-2 mb-4">
@@ -603,10 +651,12 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
                       <span className="text-purple-600 font-bold font-serif">U</span>
                     </div>
                     <h3 className="text-sm font-bold">Ultravox (AI Voice)</h3>
+                    {platformKeys.ultravox_key && <span className="ml-auto text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">Connected</span>}
                   </div>
                   <div>
                     <label className="text-[11px] font-semibold text-[#475569] uppercase tracking-[0.4px] mb-1.5 block">API Key</label>
-                    <input type="password" className="w-full bg-[#f0f3f9] border border-[#e4e9f2] rounded-[10px] px-3 py-2.5 text-[13px] outline-none font-mono" placeholder="OuX6..." />
+                    <input type="password" value={platformKeys.ultravox_key} onChange={e => setPlatformKeys(p => ({ ...p, ultravox_key: e.target.value }))}
+                      className="w-full bg-[#f0f3f9] border border-[#e4e9f2] rounded-[10px] px-3 py-2.5 text-[13px] outline-none font-mono focus:border-blue-500 transition" placeholder="OuX6..." />
                   </div>
                 </div>
 
@@ -616,36 +666,63 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
                     <div className="w-8 h-8 rounded bg-orange-100 flex items-center justify-center">
                       <span className="text-orange-600 font-bold font-serif">S3</span>
                     </div>
-                    <h3 className="text-sm font-bold">Amazon S3 (Storage)</h3>
+                    <h3 className="text-sm font-bold">Amazon S3 (Call Recordings)</h3>
+                    {platformKeys.s3_access_key && <span className="ml-auto text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">Connected</span>}
                   </div>
                   <div className="space-y-3">
                     <div>
                       <label className="text-[11px] font-semibold text-[#475569] uppercase tracking-[0.4px] mb-1.5 block">Access Key ID</label>
-                      <input type="text" className="w-full bg-[#f0f3f9] border border-[#e4e9f2] rounded-[10px] px-3 py-2.5 text-[13px] outline-none font-mono" placeholder="AKIA..." />
+                      <input type="text" value={platformKeys.s3_access_key} onChange={e => setPlatformKeys(p => ({ ...p, s3_access_key: e.target.value }))}
+                        className="w-full bg-[#f0f3f9] border border-[#e4e9f2] rounded-[10px] px-3 py-2.5 text-[13px] outline-none font-mono focus:border-blue-500 transition" placeholder="AKIA..." />
                     </div>
                     <div>
                       <label className="text-[11px] font-semibold text-[#475569] uppercase tracking-[0.4px] mb-1.5 block">Secret Access Key</label>
-                      <input type="password" className="w-full bg-[#f0f3f9] border border-[#e4e9f2] rounded-[10px] px-3 py-2.5 text-[13px] outline-none font-mono" placeholder="••••••••••••" />
+                      <input type="password" value={platformKeys.s3_secret_key} onChange={e => setPlatformKeys(p => ({ ...p, s3_secret_key: e.target.value }))}
+                        className="w-full bg-[#f0f3f9] border border-[#e4e9f2] rounded-[10px] px-3 py-2.5 text-[13px] outline-none font-mono focus:border-blue-500 transition" placeholder="••••••••••••" />
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <label className="text-[11px] font-semibold text-[#475569] uppercase tracking-[0.4px] mb-1.5 block">Bucket Name</label>
-                        <input type="text" className="w-full bg-[#f0f3f9] border border-[#e4e9f2] rounded-[10px] px-3 py-2.5 text-[13px] outline-none font-mono" placeholder="my-saas-recordings" />
+                        <input type="text" value={platformKeys.s3_bucket} onChange={e => setPlatformKeys(p => ({ ...p, s3_bucket: e.target.value }))}
+                          className="w-full bg-[#f0f3f9] border border-[#e4e9f2] rounded-[10px] px-3 py-2.5 text-[13px] outline-none font-mono focus:border-blue-500 transition" placeholder="my-saas-recordings" />
                       </div>
                       <div>
                         <label className="text-[11px] font-semibold text-[#475569] uppercase tracking-[0.4px] mb-1.5 block">Region</label>
-                        <input type="text" className="w-full bg-[#f0f3f9] border border-[#e4e9f2] rounded-[10px] px-3 py-2.5 text-[13px] outline-none font-mono" placeholder="us-east-1" />
+                        <input type="text" value={platformKeys.s3_region} onChange={e => setPlatformKeys(p => ({ ...p, s3_region: e.target.value }))}
+                          className="w-full bg-[#f0f3f9] border border-[#e4e9f2] rounded-[10px] px-3 py-2.5 text-[13px] outline-none font-mono focus:border-blue-500 transition" placeholder="us-east-1" />
                       </div>
                     </div>
                   </div>
                 </div>
 
-                <button className="bg-blue-600 hover:bg-[#1e40af] text-white px-4 py-2.5 rounded-[10px] text-[13px] font-semibold transition-all w-full mt-2">
-                  Save Platform Settings
+                {/* Resend */}
+                <div className="bg-white border border-[#e4e9f2] rounded-[14px] p-5 shadow-[0_1px_3px_rgba(15,23,42,0.06)]">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="w-8 h-8 rounded bg-blue-100 flex items-center justify-center">
+                      <span className="text-blue-600 font-bold font-serif">R</span>
+                    </div>
+                    <h3 className="text-sm font-bold">Resend (Email Notifications)</h3>
+                    {platformKeys.resend_key && <span className="ml-auto text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">Connected</span>}
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-semibold text-[#475569] uppercase tracking-[0.4px] mb-1.5 block">API Key</label>
+                    <input type="password" value={platformKeys.resend_key} onChange={e => setPlatformKeys(p => ({ ...p, resend_key: e.target.value }))}
+                      className="w-full bg-[#f0f3f9] border border-[#e4e9f2] rounded-[10px] px-3 py-2.5 text-[13px] outline-none font-mono focus:border-blue-500 transition" placeholder="re_..." />
+                  </div>
+                </div>
+
+                <button onClick={savePlatformSettings} disabled={isSaving}
+                  className="bg-blue-600 hover:bg-[#1e40af] text-white px-4 py-2.5 rounded-[10px] text-[13px] font-semibold transition-all w-full mt-2 disabled:opacity-50">
+                  {isSaving ? 'Saving...' : 'Save Platform Settings'}
                 </button>
+
+                <p className="text-[11px] text-[#94a3b8] text-center mt-2">
+                  Changes take effect immediately on all future calls. No redeployment needed.
+                </p>
               </div>
             </div>
-          )}
+            );
+          })()}
 
         </div>
 
