@@ -298,6 +298,24 @@ app.put('/api/clients/:id', async (req, res) => {
 app.delete('/api/clients/:id', async (req, res) => {
     try {
         const { id } = req.params;
+        
+        // Fetch client code to cascade delete all isolated data
+        const { data: client } = await supabase.from('clients').select('client_code').eq('id', id).maybeSingle();
+        if (client && client.client_code) {
+            const code = client.client_code;
+            console.log(`[Admin] Erasing all SaaS data for client code: ${code}`);
+            await Promise.all([
+                supabase.from('agent_settings').delete().eq('client_id', code),
+                supabase.from('integrations').delete().eq('client_id', code),
+                supabase.from('calls').delete().eq('client_id', code),
+                supabase.from('leads').delete().eq('client_id', code),
+                supabase.from('contacts').delete().eq('client_id', code),
+                supabase.from('campaigns').delete().eq('client_id', code),
+                supabase.from('campaign_contacts').delete().eq('client_id', code),
+                supabase.from('appointments').delete().eq('client_id', code)
+            ]);
+        }
+
         const { error } = await supabase.from('clients').delete().eq('id', id);
         if (error) throw error;
         res.json({ success: true });
@@ -501,6 +519,10 @@ app.post('/api/twilio/inbound', async (req, res) => {
 
         // Add optional tools based on dashboard settings
         if (toolsConfig.hangUp) {
+            let finalPromptWithHangup = finalPrompt;
+            finalPromptWithHangup += "\n\nCRITICAL CALL TERMINATION DIRECTIVES:\n1. If the user says 'goodbye', 'bye', or indicates they are leaving, you MUST immediately call the 'hang_up' tool without saying another word.\n2. If the user is silent for more than 15-20 seconds and does not respond to your prompts, you MUST automatically call the 'hang_up' tool to end the call and save costs.";
+            finalPrompt = finalPromptWithHangup;
+
             selectedTools.push({
                 temporaryTool: {
                     modelToolName: "hang_up",
@@ -874,6 +896,10 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
         ];
 
         if (toolsConfig.hangUp) {
+            let finalPromptWithHangup = finalPrompt;
+            finalPromptWithHangup += "\n\nCRITICAL CALL TERMINATION DIRECTIVES:\n1. If the user says 'goodbye', 'bye', or indicates they are leaving, you MUST immediately call the 'hang_up' tool without saying another word.\n2. If the user is silent for more than 15-20 seconds and does not respond to your prompts, you MUST automatically call the 'hang_up' tool to end the call and save costs.";
+            finalPrompt = finalPromptWithHangup;
+
             selectedTools.push({
                 temporaryTool: {
                     modelToolName: "hang_up",

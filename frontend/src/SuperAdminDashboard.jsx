@@ -249,6 +249,24 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
     }
   };
 
+  const handleDeleteClient = async (clientId, clientCode) => {
+    if (!window.confirm(`WARNING: Are you sure you want to permanently delete the dashboard for ${clientCode}? This will erase all their settings, integrations, calls, and leads.`)) return;
+    
+    try {
+      const res = await fetch(`${API_BASE}/api/clients/${clientId}`, {
+        method: 'DELETE'
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast('Client dashboard securely deleted.', 'success');
+        setEditingClient(null);
+        setClients(clients.filter(c => c.id !== clientId));
+      } else {
+        showToast('Failed to delete client', 'error');
+      }
+    } catch (err) { showToast('Server error', 'error'); }
+  };
+
   const copySlug = () => {
     if (!slugPreview) return;
     navigator.clipboard.writeText(slugPreview).then(() => showToast('URL copied!')).catch(() => {});
@@ -835,14 +853,22 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
                    </div>
                 </div>
               </div>
-              <div className="px-6 py-4 bg-slate-50 border-t border-[#e4e9f2] flex items-center justify-end gap-3">
-                <button onClick={() => setEditingClient(null)} className="px-4 py-2 text-slate-600 font-semibold text-[13px]">Cancel</button>
+              <div className="px-6 py-4 bg-slate-50 border-t border-[#e4e9f2] flex items-center justify-between">
                 <button 
-                  onClick={() => handleUpdateClient(editingClient)}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-xl text-[13px] font-bold shadow-lg shadow-blue-500/20 transition-all"
+                  onClick={() => handleDeleteClient(editingClient.id, editingClient.client_code)}
+                  className="px-4 py-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-xl font-bold text-[13px] transition-all"
                 >
-                  Save Changes
+                  Delete Dashboard
                 </button>
+                <div className="flex items-center gap-3">
+                  <button onClick={() => setEditingClient(null)} className="px-4 py-2 text-slate-600 font-semibold text-[13px]">Cancel</button>
+                  <button 
+                    onClick={() => handleUpdateClient(editingClient)}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-xl text-[13px] font-bold shadow-lg shadow-blue-500/20 transition-all"
+                  >
+                    Save Changes
+                  </button>
+                </div>
               </div>
             </div>
           </div>
