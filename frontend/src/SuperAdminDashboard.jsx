@@ -221,6 +221,8 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
   };
 
   const [editingClient, setEditingClient] = useState(null);
+  const [deletePrompt, setDeletePrompt] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
 
   const handleUpdateClient = async (updatedClient) => {
     try {
@@ -250,11 +252,10 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
   };
 
   const handleDeleteClient = async (clientId, clientCode) => {
-    const password = window.prompt(`WARNING: You are about to permanently delete the dashboard for ${clientCode}.\nThis will erase all settings, integrations, calls, and leads.\n\nTo confirm, please enter the client's current password:`);
-    
-    if (password === null) return; // User clicked Cancel
-    if (password !== editingClient.password) {
+    if (deletePassword !== editingClient.password) {
       showToast('Incorrect password. Deletion cancelled.', 'error');
+      setDeletePrompt(false);
+      setDeletePassword('');
       return;
     }
     
@@ -266,6 +267,8 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
       if (data.success) {
         showToast('Client dashboard securely deleted.', 'success');
         setEditingClient(null);
+        setDeletePrompt(false);
+        setDeletePassword('');
         setClients(clients.filter(c => c.id !== clientId));
       } else {
         showToast('Failed to delete client', 'error');
@@ -859,23 +862,51 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
                    </div>
                 </div>
               </div>
-              <div className="px-6 py-4 bg-slate-50 border-t border-[#e4e9f2] flex items-center justify-between">
-                <button 
-                  onClick={() => handleDeleteClient(editingClient.id, editingClient.client_code)}
-                  className="px-4 py-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-xl font-bold text-[13px] transition-all"
-                >
-                  Delete Dashboard
-                </button>
-                <div className="flex items-center gap-3">
-                  <button onClick={() => setEditingClient(null)} className="px-4 py-2 text-slate-600 font-semibold text-[13px]">Cancel</button>
-                  <button 
-                    onClick={() => handleUpdateClient(editingClient)}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-xl text-[13px] font-bold shadow-lg shadow-blue-500/20 transition-all"
-                  >
-                    Save Changes
-                  </button>
+              
+              {deletePrompt ? (
+                <div className="px-6 py-4 bg-red-50 border-t border-red-200 flex flex-col gap-3">
+                  <p className="text-red-700 text-xs font-bold">WARNING: This will permanently erase {editingClient.client_code}'s dashboard and all their data.</p>
+                  <div className="flex gap-2">
+                    <input 
+                      type="password" 
+                      placeholder="Enter client's password to confirm" 
+                      value={deletePassword}
+                      onChange={(e) => setDeletePassword(e.target.value)}
+                      className="flex-1 bg-white border border-red-300 rounded-lg px-3 py-2 text-[12px] outline-none focus:border-red-500"
+                    />
+                    <button 
+                      onClick={() => handleDeleteClient(editingClient.id, editingClient.client_code)}
+                      className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-[13px] font-bold"
+                    >
+                      Confirm Delete
+                    </button>
+                    <button 
+                      onClick={() => { setDeletePrompt(false); setDeletePassword(''); }}
+                      className="px-4 py-2 text-slate-600 font-semibold text-[13px]"
+                    >
+                      Cancel
+                    </button>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="px-6 py-4 bg-slate-50 border-t border-[#e4e9f2] flex items-center justify-between">
+                  <button 
+                    onClick={() => setDeletePrompt(true)}
+                    className="px-4 py-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-xl font-bold text-[13px] transition-all"
+                  >
+                    Delete Dashboard
+                  </button>
+                  <div className="flex items-center gap-3">
+                    <button onClick={() => setEditingClient(null)} className="px-4 py-2 text-slate-600 font-semibold text-[13px]">Cancel</button>
+                    <button 
+                      onClick={() => handleUpdateClient(editingClient)}
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-xl text-[13px] font-bold shadow-lg shadow-blue-500/20 transition-all"
+                    >
+                      Save Changes
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
