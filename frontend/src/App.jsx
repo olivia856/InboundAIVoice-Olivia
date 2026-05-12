@@ -1366,7 +1366,7 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
             )}
             {kbTab === 'file' && (
               <div className="bg-card border border-border rounded-2xl p-6 shadow-premium-lg">
-                <p className="text-xs text-muted-foreground mb-5 leading-relaxed">Upload a PDF or Word file. Requires a <strong>Corpus API Key</strong> in API Credentials.</p>
+                <p className="text-xs text-muted-foreground mb-5 leading-relaxed">Upload a PDF or Word file to your AI's Knowledge Base.</p>
                 <div className="border-2 border-dashed border-border rounded-xl p-8 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-white/[0.02] transition relative">
                   <FileText size={32} className="text-muted-foreground mb-3" />
                   <h4 className="font-semibold text-sm mb-1">Drop PDF or Word file here</h4>
@@ -1393,7 +1393,7 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
             )}
             {kbTab === 'url' && (
               <div className="bg-card border border-border rounded-2xl p-6 shadow-premium-lg">
-                <p className="text-xs text-muted-foreground mb-4 leading-relaxed">Paste a website URL. Ultravox will scrape and index it. Requires a <strong>Corpus API Key</strong> in API Credentials.</p>
+                <p className="text-xs text-muted-foreground mb-4 leading-relaxed">Paste a website URL. The AI will scrape and index it into the Knowledge Base.</p>
                 <label className="block text-xs font-bold text-muted-foreground uppercase mb-2">Website URL</label>
                 <div className="flex gap-3">
                   <input value={corpusUrl} onChange={e => setCorpusUrl(e.target.value)} placeholder="https://yourwebsite.com/faq"
@@ -1881,25 +1881,6 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
               </form>
             </div>
 
-            {/* --- AZLON API CONFIG --- */}
-            <div className="bg-card border border-border rounded-2xl p-8 shadow-premium-lg">
-              <h3 className="text-sm font-bold uppercase tracking-widest mb-6 flex items-center gap-2">
-                <Sparkles size={16} className="text-purple-400" /> Azlon Intelligence
-              </h3>
-              <form onSubmit={saveUVConfig} className="space-y-5">
-                <div>
-                  <label className="block text-[10px] font-bold text-muted-foreground uppercase tracking-ultra mb-2">Azlon Unique Key</label>
-                  <input type="password" value={uvConfig.api_key} onChange={(e) => setUVConfig({...uvConfig, api_key: e.target.value})} placeholder="sk_live_..." className="w-full bg-background border border-border p-3 rounded-xl text-sm outline-none focus:border-primary transition-all font-mono" required />
-                  <p className="text-[10px] text-muted-foreground mt-3 italic">This key is required for the AI to process voice and speak to callers.</p>
-                </div>
-                <div className="pt-2">
-                  <button type="submit" disabled={isSavingUV} className="w-full bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/30 font-bold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2">
-                    {isSavingUV ? 'Saving...' : 'Update AI Provider Key'}
-                  </button>
-                </div>
-              </form>
-            </div>
-
             {/* --- ELEVENLABS CONFIG --- */}
             <div className="bg-card border border-border rounded-2xl p-8 shadow-premium-lg">
               <h3 className="text-sm font-bold uppercase tracking-widest mb-6 flex items-center gap-2">
@@ -1922,90 +1903,6 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                     {isSavingElevenLabs ? 'Saving...' : 'Update ElevenLabs Keys'}
                   </button>
                 </div>
-              </form>
-            </div>
-
-            {/* --- RESEND API CONFIG --- */}
-            <div className="bg-card border border-border rounded-2xl p-8 shadow-premium-lg mt-8">
-              <h3 className="text-sm font-bold uppercase tracking-widest mb-6 flex items-center gap-2">
-                <Globe size={16} className="text-emerald-400" /> Resend Mailing API
-              </h3>
-              <form onSubmit={saveResendConfig} className="space-y-5">
-                <div>
-                  <label className="block text-[10px] font-bold text-muted-foreground uppercase tracking-ultra mb-2">Resend API Key</label>
-                  <input type="password" value={resendConfig.api_key} onChange={(e) => setResendConfig({...resendConfig, api_key: e.target.value})} placeholder="re_..." className="w-full bg-background border border-border p-3 rounded-xl text-sm outline-none focus:border-primary transition-all font-mono" required />
-                  <p className="text-[10px] text-muted-foreground mt-3 italic">Used for automated meeting confirmations, reminders, and follow-ups.</p>
-                </div>
-                <div className="pt-2">
-                  <button type="submit" disabled={isSavingResend} className="w-full bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-bold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2">
-                    {isSavingResend ? 'Saving...' : 'Update Resend Email Key'}
-                  </button>
-                </div>
-              </form>
-            </div>
-
-
-            {/* --- ULTRAVOX CORPUS API KEY --- */}
-            <div className="bg-card border border-border rounded-2xl p-8 shadow-premium-lg mt-8">
-              <h3 className="text-sm font-bold uppercase tracking-widest mb-1 flex items-center gap-2">
-                <BookOpen size={16} className="text-amber-400" /> Ultravox Corpus API Key
-              </h3>
-              <p className="text-xs text-muted-foreground mb-5">Separate key for uploading PDFs, Word files, and URLs to the Knowledge Base Corpora (used in Knowledge Base page).</p>
-              <form onSubmit={async (e) => {
-                e.preventDefault();
-                const val = e.target.corpus_key.value;
-                const ok = await saveIntegration('ultravox_corpus', val, {});
-                if (ok) showToast('Corpus key saved!', 'success');
-              }} className="space-y-4">
-                <div>
-                  <label className="block text-[10px] font-bold text-muted-foreground uppercase tracking-ultra mb-2">Corpus API Key</label>
-                  <input name="corpus_key" type="password" defaultValue={getIntegration('ultravox_corpus').api_key || ''}
-                    placeholder="sk_live_..." className="w-full bg-background border border-border p-3 rounded-xl text-sm outline-none focus:border-primary transition-all font-mono" />
-                </div>
-                <button type="submit" className="w-full bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 font-bold py-3.5 rounded-xl transition-all">Save Corpus Key</button>
-              </form>
-            </div>
-
-            {/* --- AWS S3 CONFIG --- */}
-            <div className="bg-card border border-border rounded-2xl p-8 shadow-premium-lg mt-8">
-              <h3 className="text-sm font-bold uppercase tracking-widest mb-1 flex items-center gap-2">
-                <Globe size={16} className="text-blue-400" /> AWS S3 Call Recordings
-              </h3>
-              <p className="text-xs text-muted-foreground mb-5">Store voice recordings securely in your personal AWS S3 bucket.</p>
-              <form onSubmit={async (e) => {
-                e.preventDefault();
-                const btn = e.target.querySelector('button[type="submit"]'); btn.innerText = 'Saving...';
-                const key = e.target.s3_secret.value;
-                const meta = { 
-                  access_key: e.target.s3_key.value,
-                  region: e.target.s3_region.value,
-                  bucket: e.target.s3_bucket.value 
-                };
-                const ok = await saveIntegration('aws_s3', key, meta);
-                if (ok) showToast('AWS S3 credentials updated!', 'success');
-                btn.innerText = 'Update AWS S3 Bucket';
-              }} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-[10px] font-bold text-muted-foreground uppercase tracking-ultra mb-2">Access Key ID</label>
-                    <input name="s3_key" defaultValue={getIntegration('aws_s3').meta_data?.access_key || ''} placeholder="AKIA..." className="w-full bg-background border border-border p-3 rounded-xl text-sm outline-none font-mono" required />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-muted-foreground uppercase tracking-ultra mb-2">Secret Access Key</label>
-                    <input name="s3_secret" type="password" defaultValue={getIntegration('aws_s3').api_key || ''} placeholder="••••••••" className="w-full bg-background border border-border p-3 rounded-xl text-sm outline-none font-mono" required />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-[10px] font-bold text-muted-foreground uppercase tracking-ultra mb-2">Region</label>
-                    <input name="s3_region" defaultValue={getIntegration('aws_s3').meta_data?.region || 'us-east-1'} placeholder="us-east-1" className="w-full bg-background border border-border p-3 rounded-xl text-sm outline-none font-mono" required />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-muted-foreground uppercase tracking-ultra mb-2">Bucket Name</label>
-                    <input name="s3_bucket" defaultValue={getIntegration('aws_s3').meta_data?.bucket || ''} placeholder="my-call-recordings" className="w-full bg-background border border-border p-3 rounded-xl text-sm outline-none font-mono" required />
-                  </div>
-                </div>
-                <button type="submit" className="w-full bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30 font-bold py-3.5 rounded-xl transition-all">Update AWS S3 Bucket</button>
               </form>
             </div>
           </div>
