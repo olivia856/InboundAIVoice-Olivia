@@ -352,6 +352,11 @@ app.post('/api/twilio/inbound', async (req, res) => {
         const { data: client } = await supabase.from('clients').select('*').eq('phone', To).maybeSingle();
         const clientId = client?.client_code || null; 
         
+        if (client && client.agent_enabled === false) {
+            console.log(`[Twilio Inbound] AI Agent is paused for ${To}. Rejecting call.`);
+            return res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response><Reject reason="busy"/></Response>`);
+        }
+
         if (!clientId) {
             console.log(`[Twilio Inbound] No specific client found for ${To}. Using platform default.`);
         }
@@ -676,7 +681,12 @@ app.post('/api/calls/outbound', async (req, res) => {
         
         console.log(`Initiating Outbound Call to: ${toPhone}`);
 
-        // 1. Check Twilio Credentials
+        // 1. Check Twilio Credentials & Agent Status
+        const { data: client } = await supabase.from('clients').select('agent_enabled').eq('id', client_id).maybeSingle();
+        if (client && client.agent_enabled === false) {
+            return res.status(400).json({ error: "AI Agent is currently paused. Please enable it in the dashboard to make outbound calls." });
+        }
+
         const { data: twInt } = await supabase.from('integrations').select('*').eq('provider', 'twilio').eq('client_id', client_id).single();
         const TWILIO_SID = (twInt?.meta_data?.sid || process.env.TWILIO_ACCOUNT_SID)?.trim();
         const TWILIO_AUTH = (twInt?.api_key || process.env.TWILIO_AUTH_TOKEN)?.trim();

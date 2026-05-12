@@ -417,6 +417,16 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                     }
                   } catch {}
                   const newValue = agentToggleModal.action === 'enable';
+                  
+                  // Update backend
+                  if (user && user.id) {
+                    fetch(`${API_BASE}/api/clients/${user.id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ agent_enabled: newValue })
+                    }).catch(console.error);
+                  }
+
                   setAgentEnabled(newValue);
                   if (onAgentToggle) onAgentToggle(newValue);
                   setAgentToggleModal(null);
