@@ -232,14 +232,20 @@ app.post('/api/platform-settings', async (req, res) => {
         // Upsert: update if exists, insert if not
         const { data: existing } = await supabase
             .from('platform_settings')
-            .select('id')
+            .select('id, api_key')
             .eq('provider', provider)
             .maybeSingle();
 
         let result;
         if (existing) {
             const updatePayload = {};
-            if (api_key) updatePayload.api_key = api_key;
+            if (api_key) {
+                let finalApiKey = api_key.trim();
+                if (finalApiKey.includes('••••')) {
+                    finalApiKey = existing.api_key || finalApiKey;
+                }
+                updatePayload.api_key = finalApiKey;
+            }
             if (meta_data) updatePayload.meta_data = meta_data;
             updatePayload.updated_at = new Date().toISOString();
             result = await supabase.from('platform_settings').update(updatePayload).eq('id', existing.id).select().single();
