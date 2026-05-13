@@ -18,7 +18,7 @@ const fetch = require('node-fetch');
 
 // Friendly greeting for the root URL so the browser doesn't show an error
 app.get('/', (req, res) => {
-    res.send('✅ Azlon AI Backend is Live & Running!');
+    res.send('✅ Azlon AI Backend is Live & Running! (Version: 2.1 - Robust TwiML Fix)');
 });
 
 const PORT = 8000;
