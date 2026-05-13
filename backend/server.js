@@ -362,8 +362,9 @@ app.post('/api/twilio/inbound', async (req, res) => {
         }
 
         // 1. Fetch Integration Keys from Database
+        const { data: clientUV } = await supabase.from('integrations').select('*').eq('provider', 'ultravox').eq('client_id', clientId).maybeSingle();
         const platformUV = await getPlatformKey('ultravox');
-        const ACTIVE_ULTRAVOX_KEY = platformUV?.api_key || process.env.ULTRAVOX_API_KEY;
+        const ACTIVE_ULTRAVOX_KEY = clientUV?.api_key || platformUV?.api_key || process.env.ULTRAVOX_API_KEY;
 
         if (!ACTIVE_ULTRAVOX_KEY) {
             console.error("Ultravox API key is completely missing. Add it in the Dashboard's API Credentials page.");
@@ -752,8 +753,9 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
         const { toPhone, voice: reqVoice, goal: reqGoal, name: reqName, client_id } = req.query;
 
         // 1. Fetch Ultravox Key
+        const { data: clientUV } = await supabase.from('integrations').select('*').eq('provider', 'ultravox').eq('client_id', client_id).maybeSingle();
         const platformUV2 = await getPlatformKey('ultravox');
-        const ACTIVE_ULTRAVOX_KEY = platformUV2?.api_key || process.env.ULTRAVOX_API_KEY;
+        const ACTIVE_ULTRAVOX_KEY = clientUV?.api_key || platformUV2?.api_key || process.env.ULTRAVOX_API_KEY;
 
         if (!ACTIVE_ULTRAVOX_KEY) return res.status(500).send('<Response><Say>AI Key Error</Say></Response>');
 
