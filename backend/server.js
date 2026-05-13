@@ -22,7 +22,7 @@ const PORT = 8000;
 const ULTRAVOX_API_KEY = process.env.ULTRAVOX_API_KEY;
 
 // Base URL for Twilio callbacks (Prefer environment variable)
-const BACKEND_URL = process.env.BACKEND_URL || '';
+const BACKEND_URL = process.env.BACKEND_URL || process.env.SERVER_BASE_URL || '';
 if (!BACKEND_URL) {
     console.warn("⚠️ [Startup] WARNING: BACKEND_URL environment variable is not set. Many callbacks will use the request host header, which might be unreliable in some environments.");
 } else {
@@ -410,7 +410,8 @@ app.post('/api/twilio/inbound', async (req, res) => {
 
         // Use BACKEND_URL if set, otherwise fallback to request host.
         // Prefer HTTPS if BACKEND_URL is not set but request host is available.
-        const baseUrl = BACKEND_URL || (req.get('host') ? `https://${req.get('host')}` : '');
+        let baseUrl = req.get('host') ? `https://${req.get('host')}` : '';
+        if (BACKEND_URL && !BACKEND_URL.includes('your-server.com')) baseUrl = BACKEND_URL;
         console.log(`[Ultravox] Creating session with tools/callbacks at: ${baseUrl}`);
         
         const finalVoice = agentData?.voice_preset || "Mark";
@@ -700,8 +701,10 @@ app.post('/api/calls/outbound', async (req, res) => {
 
         const twilioClient = twilio(TWILIO_SID, TWILIO_AUTH);
         
-        // Dynamic backend URL selection
-        const serverBaseUrl = BACKEND_URL || `https://${req.get('host')}`;
+        // Dynamic backend URL selection (Ignore dummy env variables)
+        let serverBaseUrl = `https://${req.get('host')}`;
+        if (BACKEND_URL && !BACKEND_URL.includes('your-server.com')) serverBaseUrl = BACKEND_URL;
+        
         const webhookUrl = `${serverBaseUrl}/api/twilio/outbound-twiml?toPhone=${encodeURIComponent(toPhone || '')}&voice=${encodeURIComponent(voice || '')}&goal=${encodeURIComponent(goal || '')}&name=${encodeURIComponent(name || '')}&client_id=${encodeURIComponent(client_id || '')}`;
 
         // Get agent settings to check if recording is enabled
@@ -2023,11 +2026,10 @@ async function launchCampaignWithContacts(contacts, campaignName, voice, goal, s
             await supabase.from('campaigns').update({ status: 'failed' }).eq('id', campaign.id);
             return;
         }
-        const serverBaseUrl = BACKEND_URL;
-        if (!serverBaseUrl) {
-            console.error("❌ [Campaign] BACKEND_URL is missing. Campaign callbacks will fail. Set it in your environment variables.");
-            await supabase.from('campaigns').update({ status: 'failed' }).eq('id', campaign.id);
-            return;
+        let serverBaseUrl = process.env.BACKEND_URL;
+        if (!serverBaseUrl || serverBaseUrl.includes('your-server.com')) {
+            console.error("⚠️ [Campaign] BACKEND_URL is missing or uses dummy template. Campaign callbacks will fail. Set it in your environment variables.");
+            serverBaseUrl = `https://${process.env.RAILWAY_PUBLIC_DOMAIN || 'localhost'}`;
         }
 
         for (let i = 0; i < contacts.length; i++) {
