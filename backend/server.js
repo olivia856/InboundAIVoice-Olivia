@@ -32,9 +32,9 @@ if (!BACKEND_URL) {
     console.log(`✅ [Startup] BACKEND_URL is configured as: ${BACKEND_URL}`);
 }
 
-// Hardcode failsafe for truncated Easypanel environment variables
-let finalDbUrl = 'https://qhqmljwexivhvxzfklum.supabase.co';
-let finalDbKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFocW1sandleGl2aHZ4emZrbHVtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ3OTM3MjMsImV4cCI6MjA5MDM2OTcyM30.nO_aKJkRRsDNSIWDLgmvos7LxISvenFz2Fwn-62BgLo';
+// Supabase Initialization: Prioritize environment variables, fallback to hardcoded failsafe
+const finalDbUrl = process.env.SUPABASE_URL || 'https://qhqmljwexivhvxzfklum.supabase.co';
+const finalDbKey = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFocW1sandleGl2aHZ4emZrbHVtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ3OTM3MjMsImV4cCI6MjA5MDM2OTcyM30.nO_aKJkRRsDNSIWDLgmvos7LxISvenFz2Fwn-62BgLo';
 const supabase = createClient(finalDbUrl, finalDbKey);
 // --- AWS S3 NOTIFICATION ENGINE ---
 async function getS3Client() {
