@@ -993,12 +993,8 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
         
         if (!joinUrl) {
             console.error("Ultravox API failed:", uvData);
-            const errorTwiml = `<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-    <Say>Ultravox API Error: ${JSON.stringify(uvData).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;')}</Say>
-</Response>`;
             res.set('Content-Type', 'text/xml');
-            return res.send(errorTwiml);
+            return res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response><Say>The AI engine returned an error. Check server logs.</Say></Response>`);
         }
 
         const safeJoinUrl = joinUrl.replace(/&/g, '&amp;');
