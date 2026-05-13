@@ -124,7 +124,7 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
       const res = await fetch(`${API_BASE}/api/integrations/ultravox`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(uvConfig)
+        body: JSON.stringify({...uvConfig, client_id: (user?.client_code || user?.clientCode)})
       });
       const data = await res.json();
       if (data.success) {
@@ -142,7 +142,7 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
       const res = await fetch(`${API_BASE}/api/integrations/resend`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(resendConfig)
+        body: JSON.stringify({...resendConfig, client_id: (user?.client_code || user?.clientCode)})
       });
       const data = await res.json();
       if (data.success) {
