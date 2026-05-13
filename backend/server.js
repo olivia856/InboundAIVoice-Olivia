@@ -362,13 +362,13 @@ app.post('/api/twilio/inbound', async (req, res) => {
         }
 
         // 1. Fetch Integration Keys from Database
-        const { data: clientUV } = await supabase.from('integrations').select('*').eq('provider', 'ultravox').eq('client_id', clientId).maybeSingle();
         const platformUV = await getPlatformKey('ultravox');
-        const ACTIVE_ULTRAVOX_KEY = clientUV?.api_key || platformUV?.api_key || process.env.ULTRAVOX_API_KEY;
+        const ACTIVE_ULTRAVOX_KEY = platformUV?.api_key || process.env.ULTRAVOX_API_KEY;
 
         if (!ACTIVE_ULTRAVOX_KEY) {
             console.error("Ultravox API key is completely missing. Add it in the Dashboard's API Credentials page.");
-            return res.status(500).send(`<?xml version="1.0" encoding="UTF-8"?><Response><Say>The AI agent is not configured.</Say></Response>`);
+            res.set('Content-Type', 'text/xml');
+            return res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response><Say>The platform AI key is missing. Please contact support.</Say></Response>`);
         }
 
         // 2. Check database for Custom System Prompt and settings for THIS client
@@ -670,7 +670,8 @@ app.post('/api/twilio/inbound', async (req, res) => {
             const body = await error.response.text();
             console.error("Ultravox API Rejected Request:", body);
         }
-        res.status(500).send("Error connecting AI Agent");
+        res.set('Content-Type', 'text/xml');
+        res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response><Say>A system error occurred while connecting the AI.</Say></Response>`);
     }
 });
 
@@ -752,12 +753,14 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
     try {
         const { toPhone, voice: reqVoice, goal: reqGoal, name: reqName, client_id } = req.query;
 
-        // 1. Fetch Ultravox Key
-        const { data: clientUV } = await supabase.from('integrations').select('*').eq('provider', 'ultravox').eq('client_id', client_id).maybeSingle();
+        // 1. Fetch Ultravox Key (Force Platform Settings Only)
         const platformUV2 = await getPlatformKey('ultravox');
-        const ACTIVE_ULTRAVOX_KEY = clientUV?.api_key || platformUV2?.api_key || process.env.ULTRAVOX_API_KEY;
+        const ACTIVE_ULTRAVOX_KEY = platformUV2?.api_key || process.env.ULTRAVOX_API_KEY;
 
-        if (!ACTIVE_ULTRAVOX_KEY) return res.status(500).send('<Response><Say>AI Key Error</Say></Response>');
+        if (!ACTIVE_ULTRAVOX_KEY) {
+            res.set('Content-Type', 'text/xml');
+            return res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response><Say>The platform AI key is missing. Please contact support.</Say></Response>`);
+        }
 
         const { data: agentData } = await supabase.from('agent_settings').select('*').eq('client_id', client_id).limit(1).maybeSingle();
         
@@ -1022,7 +1025,8 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
 
     } catch (err) {
         console.error("Outbound TwiML Webhook Error:", err);
-        res.status(500).send('<Response><Say>Error loading AI.</Say></Response>');
+        res.set('Content-Type', 'text/xml');
+        res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response><Say>A system error occurred while loading the AI.</Say></Response>`);
     }
 });
 
