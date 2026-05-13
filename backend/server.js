@@ -13,12 +13,9 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(express.json({ limit: '10mb' }));
 app.use(cors());
 
-// axios is already required above at line 8
-const fetch = require('node-fetch');
-
 // Friendly greeting for the root URL so the browser doesn't show an error
 app.get('/', (req, res) => {
-    res.send('✅ Azlon AI Backend is Live & Running! (Version: 2.1 - Robust TwiML Fix)');
+    res.send('✅ Azlon AI Backend is Live & Running!');
 });
 
 const PORT = 8000;
@@ -32,9 +29,9 @@ if (!BACKEND_URL) {
     console.log(`✅ [Startup] BACKEND_URL is configured as: ${BACKEND_URL}`);
 }
 
-// Supabase Initialization: Prioritize environment variables, fallback to hardcoded failsafe
-const finalDbUrl = process.env.SUPABASE_URL || 'https://qhqmljwexivhvxzfklum.supabase.co';
-const finalDbKey = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFocW1sandleGl2aHZ4emZrbHVtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ3OTM3MjMsImV4cCI6MjA5MDM2OTcyM30.nO_aKJkRRsDNSIWDLgmvos7LxISvenFz2Fwn-62BgLo';
+// Hardcode failsafe for truncated Easypanel environment variables
+let finalDbUrl = 'https://qhqmljwexivhvxzfklum.supabase.co';
+let finalDbKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFocW1sandleGl2aHZ4emZrbHVtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ3OTM3MjMsImV4cCI6MjA5MDM2OTcyM30.nO_aKJkRRsDNSIWDLgmvos7LxISvenFz2Fwn-62BgLo';
 const supabase = createClient(finalDbUrl, finalDbKey);
 // --- AWS S3 NOTIFICATION ENGINE ---
 async function getS3Client() {
@@ -590,9 +587,13 @@ app.post('/api/twilio/inbound', async (req, res) => {
             }
         }
 
-        let uvData;
-        try {
-            const uvResponse = await axios.post('https://api.ultravox.ai/api/calls', {
+        const uvResponse = await fetch('https://api.ultravox.ai/api/calls', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-API-Key': ACTIVE_ULTRAVOX_KEY
+            },
+            body: JSON.stringify({
                 systemPrompt: finalPrompt,
                 voice: finalUltravoxVoice,
                 temperature: agentData?.temperature || 0.3,
@@ -600,27 +601,15 @@ app.post('/api/twilio/inbound', async (req, res) => {
                 medium: { twilio: {} },
                 selectedTools: selectedTools,
                 ...(apiKeysObj ? { apiKeys: apiKeysObj } : {})
-            }, {
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-API-Key': ACTIVE_ULTRAVOX_KEY
-                },
-                timeout: 10000
-            });
-            uvData = uvResponse.data;
-        } catch (apiErr) {
-            console.error("[Inbound] Ultravox API Error:", apiErr.response?.data || apiErr.message);
-            res.set('Content-Type', 'text/xml');
-            return res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response><Say>The AI engine is currently unavailable. Please try again later.</Say></Response>`);
-        }
+            })
+        });
 
-        const joinUrl = uvData?.joinUrl;
-        if (!joinUrl) {
+        const uvData = await uvResponse.json();
+        if (!uvData.joinUrl) {
             console.error("Ultravox API failed to generate WebSocket:", uvData);
-            res.set('Content-Type', 'text/xml');
-            return res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response><Say>The AI engine failed to connect.</Say></Response>`);
         }
-        const safeJoinUrl = joinUrl.replace(/&/g, '&amp;');
+        const joinUrl = uvData.joinUrl;
+        const safeJoinUrl = joinUrl ? joinUrl.replace(/&/g, '&amp;') : '';
         const ultravoxCallId = uvData.callId; // CAPTURE FOR SUMMARIES!
 
         // 3. SECURE LOGGING: Save the call instantly directly into your Supabase Database
@@ -985,11 +974,13 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
             }
         }
 
-        console.log(`[Ultravox] Initiating session for client: ${client_id} with key: ${ACTIVE_ULTRAVOX_KEY.substring(0, 8)}...`);
-
-        let uvData;
-        try {
-            const uvResponse = await axios.post('https://api.ultravox.ai/api/calls', {
+        const uvResponse = await fetch('https://api.ultravox.ai/api/calls', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-API-Key': ACTIVE_ULTRAVOX_KEY
+            },
+            body: JSON.stringify({
                 systemPrompt: finalPrompt,
                 voice: finalUltravoxVoice,
                 temperature: agentData?.temperature || 0.3,
@@ -997,26 +988,16 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
                 medium: { twilio: {} },
                 selectedTools: selectedTools,
                 ...(apiKeysObj ? { apiKeys: apiKeysObj } : {})
-            }, {
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-API-Key': ACTIVE_ULTRAVOX_KEY
-                },
-                timeout: 10000 // 10 second timeout for the API call
-            });
-            uvData = uvResponse.data;
-        } catch (apiErr) {
-            console.error("Ultravox API Error Details:", apiErr.response?.data || apiErr.message);
-            res.set('Content-Type', 'text/xml');
-            return res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response><Say>The AI engine returned an error: ${apiErr.message}. Check server logs.</Say></Response>`);
-        }
+            })
+        });
 
-        const joinUrl = uvData?.joinUrl;
+        const uvData = await uvResponse.json();
+        const joinUrl = uvData.joinUrl;
         
         if (!joinUrl) {
-            console.error("Ultravox API failed to provide joinUrl:", uvData);
+            console.error("Ultravox API failed:", uvData);
             res.set('Content-Type', 'text/xml');
-            return res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response><Say>The AI engine failed to connect. No session URL was provided.</Say></Response>`);
+            return res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response><Say>The AI engine returned an error. Check server logs.</Say></Response>`);
         }
 
         const safeJoinUrl = joinUrl.replace(/&/g, '&amp;');
@@ -2357,7 +2338,7 @@ cron.schedule('*/5 * * * *', async () => {
 
 const multer = require('multer');
 const FormData = require('form-data');
-// fetch polyfill removed - using axios for better stability
+const fetch = (...args) => import('node-fetch').then(({ default: f }) => f(...args)).catch(() => require('node-fetch')(...args));
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
 async function getCorpusKey() {
