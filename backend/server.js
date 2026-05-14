@@ -361,9 +361,10 @@ app.post('/api/twilio/inbound', async (req, res) => {
             console.log(`[Twilio Inbound] No specific client found for ${To}. Using platform default.`);
         }
 
-        // 1. Fetch Integration Keys from Database
+        // 1. Fetch Integration Keys from Database (Priority: Client -> Platform -> Env)
+        const { data: clientUV } = await supabase.from('integrations').select('*').eq('provider', 'ultravox').eq('client_id', clientId).maybeSingle();
         const platformUV = await getPlatformKey('ultravox');
-        const ACTIVE_ULTRAVOX_KEY = platformUV?.api_key || process.env.ULTRAVOX_API_KEY;
+        const ACTIVE_ULTRAVOX_KEY = clientUV?.api_key || platformUV?.api_key || process.env.ULTRAVOX_API_KEY;
 
         if (!ACTIVE_ULTRAVOX_KEY) {
             console.error("Ultravox API key is completely missing. Add it in the Dashboard's API Credentials page.");
@@ -758,9 +759,10 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
     try {
         const { toPhone, voice: reqVoice, goal: reqGoal, name: reqName, client_id } = req.query;
 
-        // 1. Fetch Ultravox Key (Force Platform Settings Only)
+        // 1. Fetch Ultravox Key (Priority: Client -> Platform -> Env)
+        const { data: clientUV2 } = await supabase.from('integrations').select('*').eq('provider', 'ultravox').eq('client_id', client_id).maybeSingle();
         const platformUV2 = await getPlatformKey('ultravox');
-        const ACTIVE_ULTRAVOX_KEY = platformUV2?.api_key || process.env.ULTRAVOX_API_KEY;
+        const ACTIVE_ULTRAVOX_KEY = clientUV2?.api_key || platformUV2?.api_key || process.env.ULTRAVOX_API_KEY;
 
         if (!ACTIVE_ULTRAVOX_KEY) {
             res.set('Content-Type', 'text/xml');
@@ -1207,9 +1209,10 @@ app.post('/api/twilio/status', async (req, res) => {
                 const { data: callRow } = await supabase.from('calls').select('ultravox_call_id, client_id').eq('twilio_sid', callSid).single();
                 if (!callRow || !callRow.ultravox_call_id) return;
 
-                // Fetch Key
+                // Fetch Key (Priority: Client -> Platform -> Env)
+                const { data: clientUV3 } = await supabase.from('integrations').select('*').eq('provider', 'ultravox').eq('client_id', callRow.client_id).maybeSingle();
                 const platformUV3 = await getPlatformKey('ultravox');
-                const ACTIVE_ULTRAVOX_KEY = platformUV3?.api_key || process.env.ULTRAVOX_API_KEY;
+                const ACTIVE_ULTRAVOX_KEY = clientUV3?.api_key || platformUV3?.api_key || process.env.ULTRAVOX_API_KEY;
 
                 // Fetch data from Ultravox
                 const uvRes = await fetch(`https://api.ultravox.ai/api/calls/${callRow.ultravox_call_id}`, {

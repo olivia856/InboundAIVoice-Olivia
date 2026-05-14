@@ -1891,6 +1891,24 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
               </form>
             </div>
 
+            {/* --- ULTRAVOX CONFIG --- */}
+            <div className="bg-card border border-border rounded-2xl p-8 shadow-premium-lg mb-8">
+              <h3 className="text-sm font-bold uppercase tracking-widest mb-6 flex items-center gap-2">
+                <Sparkles size={16} className="text-primary" /> Ultravox AI Engine
+              </h3>
+              <form onSubmit={saveUVConfig} className="space-y-5">
+                <div>
+                  <label className="block text-[10px] font-bold text-muted-foreground uppercase tracking-ultra mb-2">Ultravox API Key</label>
+                  <input type="password" value={uvConfig.api_key} onChange={(e) => setUVConfig({...uvConfig, api_key: e.target.value})} placeholder="uv_live_..." className="w-full bg-background border border-border p-3 rounded-xl text-sm outline-none focus:border-primary transition-all font-mono" required />
+                </div>
+                <div className="pt-2">
+                  <button type="submit" disabled={isSavingUV} className="w-full bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 font-bold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2">
+                    {isSavingUV ? 'Saving...' : 'Update Ultravox Keys'}
+                  </button>
+                </div>
+              </form>
+            </div>
+
             {/* --- ELEVENLABS CONFIG --- */}
             <div className="bg-card border border-border rounded-2xl p-8 shadow-premium-lg">
               <h3 className="text-sm font-bold uppercase tracking-widest mb-6 flex items-center gap-2">
