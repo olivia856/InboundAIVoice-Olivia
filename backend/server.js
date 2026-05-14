@@ -77,11 +77,19 @@ async function dispatchOmnichannel(appointmentId, name, phone, email, templateTy
     let smsBody = "";
     let emailSubject = "";
     let emailHtml = "";
-    
+    let companyName = "our company";
+    if (appointmentId && appointmentId !== 'unknown') {
+        const { data: appt } = await supabase.from('appointments').select('client_id').eq('id', appointmentId).maybeSingle();
+        if (appt && appt.client_id) {
+            const { data: client } = await supabase.from('clients').select('company_name').eq('id', appt.client_id).maybeSingle();
+            if (client && client.company_name) companyName = client.company_name;
+        }
+    }
+
     const startTimeStr = dynamicData?.start_time ? new Date(dynamicData.start_time).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : "your scheduled time";
 
     if (templateType === 'booking_confirmed') {
-        smsBody = `Hi ${name}, your Azlon AI appointment is confirmed for ${startTimeStr}. See you soon!`;
+        smsBody = `Hi ${name}, your ${companyName} appointment is confirmed for ${startTimeStr}. See you soon!`;
         emailSubject = `Your appointment is confirmed, ${name}!`;
         emailHtml = `<h2>Booking Confirmed</h2><p>Hi ${name},</p><p>We have successfully scheduled your appointment for <b>${startTimeStr}</b>.</p><p>We look forward to speaking with you.</p>`;
     } else if (templateType === 'meeting_reminder') {
@@ -93,15 +101,15 @@ async function dispatchOmnichannel(appointmentId, name, phone, email, templateTy
         emailSubject = `Sorry we missed you, ${name}`;
         emailHtml = `<h2>We missed you!</h2><p>Hi ${name},</p><p>We didn't see you at your appointment today at ${startTimeStr}.</p><p>Please let us know when you would like to reschedule!</p>`;
     } else if (templateType === 'follow_up') {
-        smsBody = `Hi ${name}, thanks for speaking with us today! If you have any more questions about Azlon AI, feel free to ask here.`;
+        smsBody = `Hi ${name}, thanks for speaking with us today! If you have any more questions about ${companyName}, feel free to ask here.`;
         emailSubject = `Great speaking with you, ${name}!`;
         emailHtml = `<h2>Thank you!</h2><p>Hi ${name},</p><p>It was great speaking with you earlier. If you have any further questions or need assistance, we're here to help.</p>`;
     } else if (templateType === 'booking_updated') {
-        smsBody = `Hi ${name}, your Azlon AI appointment has been correctly rescheduled to ${startTimeStr}. We will speak with you then!`;
+        smsBody = `Hi ${name}, your ${companyName} appointment has been correctly rescheduled to ${startTimeStr}. We will speak with you then!`;
         emailSubject = `Your appointment has been updated, ${name}`;
         emailHtml = `<h2>Booking Rescheduled</h2><p>Hi ${name},</p><p>Your appointment has been successfully moved to <b>${startTimeStr}</b>.</p><p>We look forward to speaking with you.</p>`;
     } else if (templateType === 'booking_deleted') {
-        smsBody = `Hi ${name}, your Azlon AI appointment has been cancelled as requested. Just text back whenever you're ready to re-book!`;
+        smsBody = `Hi ${name}, your ${companyName} appointment has been cancelled as requested. Just text back whenever you're ready to re-book!`;
         emailSubject = `Your appointment has been cancelled`;
         emailHtml = `<h2>Booking Cancelled</h2><p>Hi ${name},</p><p>Per your request, we have cancelled your upcoming appointment.</p><p>Feel free to reach out when you're ready to reschedule.</p>`;
     }
@@ -152,7 +160,7 @@ async function dispatchOmnichannel(appointmentId, name, phone, email, templateTy
                     auth: { user: GMAIL_USER, pass: GMAIL_PASS }
                 });
                 await transporter.sendMail({
-                    from: `"Azlon AI" <${GMAIL_USER}>`,
+                    from: `"${companyName}" <${GMAIL_USER}>`,
                     to: email,
                     subject: emailSubject,
                     html: emailHtml
@@ -176,7 +184,7 @@ async function dispatchOmnichannel(appointmentId, name, phone, email, templateTy
             try {
                 const resend = new Resend(RESEND_API_KEY);
                 await resend.emails.send({
-                    from: 'Azlon AI <onboarding@resend.dev>', // Verifying domain needed for external
+                    from: `${companyName} <onboarding@resend.dev>`, // Verifying domain needed for external
                     to: [email],
                     subject: emailSubject,
                     html: emailHtml
@@ -374,7 +382,9 @@ app.post('/api/twilio/inbound', async (req, res) => {
 
         // 2. Check database for Custom System Prompt and settings for THIS client
         const { data: agentData } = await supabase.from('agent_settings').select('*').eq('client_id', clientId).maybeSingle();
-        const fallbackPrompt = "You are the smart AI receptionist for Azlon AI. Keep answers extremely short, professional, and confident. Focus on booking appointments and answering questions using the Knowledge Base. Avoid repeating your introduction unless specifically asked.";
+        const { data: clientRow } = await supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle();
+        const companyName = clientRow?.company_name || "our company";
+        const fallbackPrompt = `You are the smart AI receptionist for ${companyName}. Keep answers extremely short, professional, and confident. Focus on booking appointments and answering questions using the Knowledge Base. Avoid repeating your introduction unless specifically asked.`;
         
         // 2.5 Load Knowledge Base automatically
         const { data: kbDocs } = await supabase.from('knowledge_base').select('content').eq('status', 'Active').eq('client_id', clientId);
@@ -1045,10 +1055,13 @@ app.post('/api/twilio/recording-callback', async (req, res) => {
         
         const { data: twInt } = await supabase.from('integrations').select('*').eq('provider', 'twilio').eq('client_id', clientId).maybeSingle();
         const { data: awsInt } = await supabase.from('integrations').select('*').eq('provider', 'aws_s3').eq('client_id', clientId).maybeSingle();
+        
+        const platformTw = await getPlatformKey('twilio');
+        const platformAws = await getPlatformKey('aws_s3');
 
-        const TW_SID = twInt?.meta_data?.sid || process.env.TWILIO_ACCOUNT_SID;
-        const TW_AUTH = twInt?.api_key || process.env.TWILIO_AUTH_TOKEN;
-        const S3_BUCKET = awsInt?.meta_data?.bucket || process.env.S3_BUCKET_NAME;
+        const TW_SID = twInt?.meta_data?.sid || platformTw?.meta_data?.sid || process.env.TWILIO_ACCOUNT_SID;
+        const TW_AUTH = twInt?.api_key || platformTw?.api_key || process.env.TWILIO_AUTH_TOKEN;
+        const S3_BUCKET = awsInt?.meta_data?.bucket || platformAws?.meta_data?.bucket || process.env.S3_BUCKET_NAME || process.env.AWS_S3_BUCKET;
 
         if (!TW_SID || !TW_AUTH || !S3_BUCKET) {
             console.error("[Recording] Missing credentials to process recording.");
@@ -1070,7 +1083,8 @@ app.post('/api/twilio/recording-callback', async (req, res) => {
         const s3 = await getS3Client();
         if (!s3) throw new Error("AWS S3 client failed to initialize.");
 
-        const key = `recordings/${CallSid}_${RecordingSid}.mp3`;
+        const isolatedFolder = clientId || 'platform';
+        const key = `recordings/${isolatedFolder}/${CallSid}.mp3`;
         await s3.send(new PutObjectCommand({
             Bucket: S3_BUCKET,
             Key: key,

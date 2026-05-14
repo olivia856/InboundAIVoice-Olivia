@@ -1060,16 +1060,16 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                     <label className="block text-xs font-bold text-muted-foreground uppercase mb-2">Voice Model</label>
                     <select name="voice" defaultValue={agentSettings.voice_preset} className="w-full bg-background border border-border rounded-lg p-3 text-sm outline-none">
                       <optgroup label="Standard Ultravox Voices">
-                        <option value="mark">🇺🇸 Mark (Male, Professional)</option>
+                        <option value="9ed99f35-ddd5-4efb-9c62-9ce9483bab61">🇺🇸 Mark (Male, Professional)</option>
                         <option value="terrence">🇺🇸 Terrence (Male, Deep)</option>
-                        <option value="alex">🇺🇸 Alex (Male, Friendly)</option>
-                        <option value="jessica">🇺🇸 Jessica (Female, Warm)</option>
+                        <option value="b28f7f08-685c-4219-a2a0-c539b985b9fd">🇺🇸 Alex (Male, Friendly)</option>
+                        <option value="a88fb2af-16ec-41a2-b6e9-86ef2f5c9622">🇺🇸 Jessica (Female, Warm)</option>
                         <option value="lily">🇺🇸 Lily (Female, Professional)</option>
-                        <option value="sarah">🇺🇸 Sarah (Female, Conversational)</option>
-                        <option value="david">🇬🇧 David (Male, British)</option>
-                        <option value="emily">🇬🇧 Emily (Female, British)</option>
-                        <option value="ryan">🇺🇸 Ryan (Male, Energetic)</option>
-                        <option value="emma">🇺🇸 Emma (Female, Energetic)</option>
+                        <option value="f972fbf6-89f5-40a1-9ad7-ee0aa445e8c3">🇺🇸 Sarah (Female, Conversational)</option>
+                        <option value="5f8e97b1-cd48-431a-b6a1-3b94306d8914">🇬🇧 David (Male, British)</option>
+                        <option value="d20e12df-6fd9-428e-a81f-ba0090de13d9">🇬🇧 Emily (Female, British)</option>
+                        <option value="bf3ee560-7c86-4d46-9f23-81b12dd6ba5f">🇺🇸 Ryan (Male, Energetic)</option>
+                        <option value="8ff05d3d-d78d-40a6-88c1-dd1efcf571f0">🇺🇸 Emma (Female, Energetic)</option>
                       </optgroup>
                       <optgroup label="Custom Integration">
                         <option value="elevenlabs:custom">🎙️ My Custom ElevenLabs Voice</option>
@@ -1530,16 +1530,16 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                 <input name="campaign_name" placeholder="Campaign Name (e.g. Past Clients Follow-up)" className="w-full bg-background border border-border p-3 rounded-lg text-sm outline-none" required />
                 <select name="campaign_voice" className="w-full bg-background border border-border p-3 rounded-lg text-sm outline-none">
                   <optgroup label="Standard Ultravox Voices">
-                    <option value="mark">🇺🇸 Mark (Male, Professional)</option>
+                    <option value="9ed99f35-ddd5-4efb-9c62-9ce9483bab61">🇺🇸 Mark (Male, Professional)</option>
                     <option value="terrence">🇺🇸 Terrence (Male, Deep)</option>
-                    <option value="alex">🇺🇸 Alex (Male, Friendly)</option>
-                    <option value="jessica">🇺🇸 Jessica (Female, Warm)</option>
+                    <option value="b28f7f08-685c-4219-a2a0-c539b985b9fd">🇺🇸 Alex (Male, Friendly)</option>
+                    <option value="a88fb2af-16ec-41a2-b6e9-86ef2f5c9622">🇺🇸 Jessica (Female, Warm)</option>
                     <option value="lily">🇺🇸 Lily (Female, Professional)</option>
-                    <option value="sarah">🇺🇸 Sarah (Female, Conversational)</option>
-                    <option value="david">🇬🇧 David (Male, British)</option>
-                    <option value="emily">🇬🇧 Emily (Female, British)</option>
-                    <option value="ryan">🇺🇸 Ryan (Male, Energetic)</option>
-                    <option value="emma">🇺🇸 Emma (Female, Energetic)</option>
+                    <option value="f972fbf6-89f5-40a1-9ad7-ee0aa445e8c3">🇺🇸 Sarah (Female, Conversational)</option>
+                    <option value="5f8e97b1-cd48-431a-b6a1-3b94306d8914">🇬🇧 David (Male, British)</option>
+                    <option value="d20e12df-6fd9-428e-a81f-ba0090de13d9">🇬🇧 Emily (Female, British)</option>
+                    <option value="bf3ee560-7c86-4d46-9f23-81b12dd6ba5f">🇺🇸 Ryan (Male, Energetic)</option>
+                    <option value="8ff05d3d-d78d-40a6-88c1-dd1efcf571f0">🇺🇸 Emma (Female, Energetic)</option>
                   </optgroup>
                   <optgroup label="Custom Integration">
                     <option value="elevenlabs:custom">🎙️ My Custom ElevenLabs Voice</option>
