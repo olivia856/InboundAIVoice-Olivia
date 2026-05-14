@@ -607,9 +607,11 @@ app.post('/api/twilio/inbound', async (req, res) => {
         const uvData = await uvResponse.json();
         if (!uvData.joinUrl) {
             console.error("Ultravox API failed to generate WebSocket:", uvData);
+            res.set('Content-Type', 'text/xml');
+            return res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response><Say>The AI engine returned an error. Please check the platform credentials.</Say></Response>`);
         }
         const joinUrl = uvData.joinUrl;
-        const safeJoinUrl = joinUrl ? joinUrl.replace(/&/g, '&amp;') : '';
+        const safeJoinUrl = joinUrl.replace(/&/g, '&amp;');
         const ultravoxCallId = uvData.callId; // CAPTURE FOR SUMMARIES!
 
         // 3. SECURE LOGGING: Save the call instantly directly into your Supabase Database
