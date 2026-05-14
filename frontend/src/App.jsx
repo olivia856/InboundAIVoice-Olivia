@@ -1604,7 +1604,7 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                            const res = await fetch(`${API_BASE}/api/campaigns/csv-launch`, {
                              method: 'POST',
                              headers: { 'Content-Type': 'application/json', 'x-client-id': (user?.client_code || user?.clientCode) },
-                             body: JSON.stringify({ csvText, campaignName, voice, goal })
+                             body: JSON.stringify({ csvText, campaignName, voice, goal, client_id: (user?.client_code || user?.clientCode) })
                            });
                            const data = await res.json();
                            if (data.success) {
@@ -1673,8 +1673,8 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                           showToast('Fetching Google Sheet and launching campaign...', 'success');
                           const res = await fetch(`${API_BASE}/api/campaigns/gsheet-launch`, {
                             method: 'POST',
-                            headers: { 'Content-Type': 'application/json', 'x-client-id': (user?.client_code || user?.clientCode) },
-                            body: JSON.stringify({ sheetUrl: url, campaignName, voice, goal })
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ sheetUrl: url, campaignName, voice, goal, client_id: (user?.client_code || user?.clientCode) })
                           });
                           const data = await res.json();
                           if (data.success) {

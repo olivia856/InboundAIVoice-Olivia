@@ -81,8 +81,8 @@ async function dispatchOmnichannel(appointmentId, name, phone, email, templateTy
     if (appointmentId && appointmentId !== 'unknown') {
         const { data: appt } = await supabase.from('appointments').select('client_id').eq('id', appointmentId).maybeSingle();
         if (appt && appt.client_id) {
-            const { data: client } = await supabase.from('clients').select('company_name').eq('id', appt.client_id).maybeSingle();
-            if (client && client.company_name) companyName = client.company_name;
+            const { data: client } = await supabase.from('clients').select('name').eq('client_code', appt.client_id).maybeSingle();
+            if (client && client.name) companyName = client.name;
         }
     }
 
@@ -313,10 +313,9 @@ app.delete('/api/clients/:id', async (req, res) => {
     try {
         const { id } = req.params;
         
-        // Fetch client code to cascade delete all isolated data
-        const { data: client } = await supabase.from('clients').select('client_code').eq('id', id).maybeSingle();
-        if (client && client.client_code) {
-            const code = client.client_code;
+        // id is the client identifier (e.g. AZL-0001) used to cascade delete isolated data
+        const code = id;
+        if (code) {
             console.log(`[Admin] Erasing all SaaS data for client code: ${code}`);
             await Promise.all([
                 supabase.from('agent_settings').delete().eq('client_id', code),
@@ -356,8 +355,8 @@ app.post('/api/twilio/inbound', async (req, res) => {
         const { To, From, CallSid } = req.body;
         console.log(`[Twilio Inbound] Incoming call from ${From} to ${To} (Sid: ${CallSid})`);
 
-        // 0. Find the Client by Twilio Number
-        const { data: client } = await supabase.from('clients').select('*').eq('phone', To).maybeSingle();
+        // 0. Find the Client by Twilio Number (Inbound Routing)
+        const { data: client } = await supabase.from('clients').select('*').eq('twilio_phone', To).maybeSingle();
         const clientId = client?.client_code || null; 
         
         if (client && client.agent_enabled === false) {
@@ -381,9 +380,10 @@ app.post('/api/twilio/inbound', async (req, res) => {
         }
 
         // 2. Check database for Custom System Prompt and settings for THIS client
-        const { data: agentData } = await supabase.from('agent_settings').select('*').eq('client_id', clientId).maybeSingle();
-        const { data: clientRow } = await supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle();
-        const companyName = clientRow?.company_name || "our company";
+        // Ensure we don't accidentally load a null/default row if clientId is missing
+        const { data: agentData } = clientId ? await supabase.from('agent_settings').select('*').eq('client_id', clientId).maybeSingle() : { data: null };
+        const { data: clientRow } = clientId ? await supabase.from('clients').select('name').eq('client_code', clientId).maybeSingle() : { data: null };
+        const companyName = clientRow?.name || "our company";
         const fallbackPrompt = `You are the smart AI receptionist for ${companyName}. Keep answers extremely short, professional, and confident. Focus on booking appointments and answering questions using the Knowledge Base. Avoid repeating your introduction unless specifically asked.`;
         
         // 2.5 Load Knowledge Base automatically
@@ -779,7 +779,9 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
             return res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response><Say>The platform AI key is missing. Please contact support.</Say></Response>`);
         }
 
-        const { data: agentData } = await supabase.from('agent_settings').select('*').eq('client_id', client_id).limit(1).maybeSingle();
+        const { data: agentData } = client_id ? await supabase.from('agent_settings').select('*').eq('client_id', client_id).limit(1).maybeSingle() : { data: null };
+        const { data: clientRow } = client_id ? await supabase.from('clients').select('name').eq('client_code', client_id).maybeSingle() : { data: null };
+        const companyName = clientRow?.name || "our company";
         
         const { data: kbDocs } = await supabase.from('knowledge_base').select('content').eq('status', 'Active').eq('client_id', client_id);
         let contextText = "";
@@ -787,7 +789,7 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
             contextText = "\n\nCOMPANY KNOWLEDGE BASE (Use this to answer questions):\n" + kbDocs.map(k => k.content).join("\n---\n");
         }
 
-        let finalPrompt = (agentData?.system_prompt || "You are an outbound sales AI calling a lead. Be incredibly persuasive, warm, and brief.") + contextText;
+        let finalPrompt = (agentData?.system_prompt || `You are an outbound sales AI calling a lead on behalf of ${companyName}. Be incredibly persuasive, warm, and brief.`) + contextText;
         
         // Add timezone context for outbound calls too
         const nowIST_out = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -1788,16 +1790,8 @@ app.post('/api/campaigns', async (req, res) => {
     }
 });
 
-app.post('/api/campaigns/csv-launch', async (req, res) => {
-    try {
-        const { csv_data, campaign_name, voice, goal, client_id } = req.body;
-        const contacts = parseCSVContacts(csv_data);
-        const campaign = await launchCampaignWithContacts(contacts, campaign_name, voice, goal, supabase, client_id);
-        res.json({ success: true, campaign });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
+// Handlers moved to bottom of file for consolidation
+
 
 // PATCH campaign stats (increment counters)
 app.patch('/api/campaigns/:id', async (req, res) => {
@@ -2105,8 +2099,11 @@ async function launchCampaignWithContacts(contacts, campaignName, voice, goal, s
 // CSV BULK UPLOAD + AUTO LAUNCH CAMPAIGN
 app.post('/api/campaigns/csv-launch', async (req, res) => {
     try {
-        const { csvText, campaignName, voice, goal } = req.body;
-        console.log('CSV Launch received:', { hasCsvText: !!csvText, csvLength: csvText?.length, campaignName });
+        const { csvText, campaignName, voice, goal, client_id } = req.body;
+        // Also check header as fallback (some parts of frontend use it)
+        const activeClientId = client_id || req.headers['x-client-id'];
+        
+        console.log('CSV Launch received:', { hasCsvText: !!csvText, csvLength: csvText?.length, campaignName, activeClientId });
         if (!csvText || !campaignName) {
             return res.status(400).json({ error: "Missing CSV data or campaign name." });
         }
@@ -2114,10 +2111,10 @@ app.post('/api/campaigns/csv-launch', async (req, res) => {
         const contacts = parseCSVContacts(csvText);
 
         if (contacts.length === 0) {
-            return res.status(400).json({ error: "No valid phone numbers found in CSV. Make sure each row has a number with at least 7 digits." });
+            return res.status(400).json({ error: "No valid phone numbers found in CSV." });
         }
 
-        const campaign = await launchCampaignWithContacts(contacts, campaignName, voice, goal, supabase);
+        const campaign = await launchCampaignWithContacts(contacts, campaignName, voice, goal, supabase, activeClientId);
 
         res.json({ 
             success: true, 
@@ -2134,7 +2131,8 @@ app.post('/api/campaigns/csv-launch', async (req, res) => {
 // GOOGLE SHEETS IMPORT + AUTO LAUNCH CAMPAIGN
 app.post('/api/campaigns/gsheet-launch', async (req, res) => {
     try {
-        const { sheetUrl, campaignName, voice, goal } = req.body;
+        const { sheetUrl, campaignName, voice, goal, client_id } = req.body;
+        const activeClientId = client_id || req.headers['x-client-id'];
         if (!sheetUrl || !campaignName) {
             return res.status(400).json({ error: "Missing Google Sheet URL or campaign name." });
         }
