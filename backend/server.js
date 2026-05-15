@@ -704,7 +704,7 @@ app.post('/api/twilio/inbound', async (req, res) => {
             } catch (e) {}
         }
         res.set('Content-Type', 'text/xml');
-        return res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response><Say>A server error occurred while connecting the AI. Error: ${error.message}</Say></Response>`);
+        return res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response><Say>A server error occurred while connecting the A I. Please try again later.</Say></Response>`);
     }
 });
 
@@ -791,6 +791,7 @@ app.post('/api/calls/outbound', async (req, res) => {
 app.post('/api/twilio/outbound-twiml', async (req, res) => {
     try {
         const { toPhone, voice: reqVoice, goal: reqGoal, name: reqName, client_id } = req.query;
+        const clientId = client_id;
 
         // 1. Determine key and base URL
         let ACTIVE_ULTRAVOX_KEY = process.env.ULTRAVOX_API_KEY;
@@ -1047,11 +1048,8 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
         
         if (!joinUrl) {
             console.error("[Ultravox Outbound Error] Failed to generate joinUrl:", uvData);
-            let errorMsg = "The AI engine returned an error.";
-            if (uvData.error) errorMsg += " Details: " + (uvData.error.message || JSON.stringify(uvData.error));
-            
             res.set('Content-Type', 'text/xml');
-            return res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response><Say>${errorMsg}. Check server logs.</Say></Response>`);
+            return res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response><Say>The A I engine returned an error. Please check server logs.</Say></Response>`);
         }
 
         const safeJoinUrl = joinUrl.replace(/&/g, '&amp;');
@@ -1079,7 +1077,7 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
     } catch (err) {
         console.error("[Twilio Outbound-TWIML] CRITICAL ERROR:", err.message);
         res.set('Content-Type', 'text/xml');
-        return res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response><Say>A server error occurred in the outbound T W I M L handler. Error: ${err.message}</Say></Response>`);
+        return res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response><Say>A server error occurred while connecting the A I. Please try again later.</Say></Response>`);
     }
 });
 
