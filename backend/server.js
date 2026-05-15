@@ -735,7 +735,11 @@ app.post('/api/calls/outbound', async (req, res) => {
         
         // Dynamic backend URL selection (Ignore dummy env variables)
         let serverBaseUrl = `https://${req.get('host')}`;
-        if (BACKEND_URL && !BACKEND_URL.includes('your-server.com')) serverBaseUrl = BACKEND_URL;
+        if (process.env.BACKEND_URL && !process.env.BACKEND_URL.includes('your-server.com')) {
+            serverBaseUrl = process.env.BACKEND_URL.replace(/\/$/, '');
+        } else if (process.env.SERVER_BASE_URL && !process.env.SERVER_BASE_URL.includes('your-server.com')) {
+            serverBaseUrl = process.env.SERVER_BASE_URL.replace(/\/$/, '');
+        }
         
         const webhookUrl = `${serverBaseUrl}/api/twilio/outbound-twiml?toPhone=${encodeURIComponent(toPhone || '')}&voice=${encodeURIComponent(voice || '')}&goal=${encodeURIComponent(goal || '')}&name=${encodeURIComponent(name || '')}&client_id=${encodeURIComponent(client_id || '')}`;
 
