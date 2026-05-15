@@ -18,7 +18,12 @@ app.use(cors());
 
 // Friendly greeting for the root URL so the browser doesn't show an error
 app.get('/', (req, res) => {
-    res.send('✅ Azlon AI Backend is Live & Running!');
+    res.send('✅ Azlon AI Backend is Live & Running! [v2.5 - path-params]');
+});
+
+// Version endpoint for deployment verification
+app.get('/api/version', (req, res) => {
+    res.json({ version: '2.5', build: 'path-params-fix', timestamp: new Date().toISOString() });
 });
 
 const PORT = 8000;
