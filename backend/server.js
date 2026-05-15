@@ -1038,8 +1038,7 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
                 temperature: agentData?.temperature || 0.3,
                 firstSpeaker: "FIRST_SPEAKER_AGENT",
                 medium: { twilio: {} },
-                selectedTools: selectedTools,
-                ...(apiKeysObj ? { apiKeys: apiKeysObj } : {})
+                selectedTools: selectedTools
             })
         });
 
