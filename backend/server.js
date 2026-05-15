@@ -359,13 +359,11 @@ app.post('/api/twilio/inbound', async (req, res) => {
         const { data: client } = await supabase.from('clients').select('*').eq('twilio_phone', To).maybeSingle();
         const clientId = client?.client_code || null; 
         
+        console.log(`[Twilio Inbound] Incoming call to ${To}. Resolved Client: ${clientId || 'NONE'}`);
+
         if (client && client.agent_enabled === false) {
             console.log(`[Twilio Inbound] AI Agent is paused for ${To}. Rejecting call.`);
             return res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response><Reject reason="busy"/></Response>`);
-        }
-
-        if (!clientId) {
-            console.log(`[Twilio Inbound] No specific client found for ${To}. Using platform default.`);
         }
 
         // 1. Fetch Integration Keys from Database (Priority: Client -> Platform -> Env)
@@ -383,11 +381,13 @@ app.post('/api/twilio/inbound', async (req, res) => {
         // Ensure we don't accidentally load a null/default row if clientId is missing
         const { data: agentData } = clientId ? await supabase.from('agent_settings').select('*').eq('client_id', clientId).maybeSingle() : { data: null };
         const { data: clientRow } = clientId ? await supabase.from('clients').select('name').eq('client_code', clientId).maybeSingle() : { data: null };
+        
+        // Safety Guard: If no clientRow found, we MUST NOT use Azlon AI defaults.
         const companyName = clientRow?.name || "our company";
         const fallbackPrompt = `You are the smart AI receptionist for ${companyName}. Keep answers extremely short, professional, and confident. Focus on booking appointments and answering questions using the Knowledge Base. Avoid repeating your introduction unless specifically asked.`;
         
         // 2.5 Load Knowledge Base automatically
-        const { data: kbDocs } = await supabase.from('knowledge_base').select('content').eq('status', 'Active').eq('client_id', clientId);
+        const { data: kbDocs } = clientId ? await supabase.from('knowledge_base').select('content').eq('status', 'Active').eq('client_id', clientId) : { data: [] };
         let contextText = "";
         if (kbDocs && kbDocs.length > 0) {
             contextText = "\n\nCOMPANY KNOWLEDGE BASE (Use this to answer questions):\n" + kbDocs.map(k => k.content).join("\n---\n");
@@ -779,11 +779,17 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
             return res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response><Say>The platform AI key is missing. Please contact support.</Say></Response>`);
         }
 
-        const { data: agentData } = client_id ? await supabase.from('agent_settings').select('*').eq('client_id', client_id).limit(1).maybeSingle() : { data: null };
+        // 1. Resolve Client & Prompt settings
         const { data: clientRow } = client_id ? await supabase.from('clients').select('name').eq('client_code', client_id).maybeSingle() : { data: null };
-        const companyName = clientRow?.name || "our company";
+        const { data: agentData } = client_id ? await supabase.from('agent_settings').select('*').eq('client_id', client_id).limit(1).maybeSingle() : { data: null };
         
-        const { data: kbDocs } = await supabase.from('knowledge_base').select('content').eq('status', 'Active').eq('client_id', client_id);
+        console.log(`[Twilio Outbound] Generating TwiML for client: ${client_id || 'NONE'}`);
+
+        const companyName = clientRow?.name || "our company";
+        const fallbackPrompt = `You are the professional AI receptionist for ${companyName}. Introduce yourself, identify the company, and help the caller. Focus on being concise and helpful.`;
+        
+        // 1.5 Load Knowledge Base automatically
+        const { data: kbDocs } = client_id ? await supabase.from('knowledge_base').select('content').eq('status', 'Active').eq('client_id', client_id) : { data: [] };
         let contextText = "";
         if (kbDocs && kbDocs.length > 0) {
             contextText = "\n\nCOMPANY KNOWLEDGE BASE (Use this to answer questions):\n" + kbDocs.map(k => k.content).join("\n---\n");
