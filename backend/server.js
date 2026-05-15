@@ -8,6 +8,9 @@ const cron = require('node-cron');
 const axios = require('axios');
 const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
 
+// Polyfill fetch for older Node.js versions
+const fetch = (...args) => import('node-fetch').then(({ default: f }) => f(...args)).catch(() => require('node-fetch')(...args));
+
 const app = express();
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(express.json({ limit: '10mb' }));
@@ -2370,7 +2373,7 @@ cron.schedule('*/5 * * * *', async () => {
 
 const multer = require('multer');
 const FormData = require('form-data');
-const fetch = (...args) => import('node-fetch').then(({ default: f }) => f(...args)).catch(() => require('node-fetch')(...args));
+// fetch is now defined at the top of the file
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
 async function getCorpusKey() {
