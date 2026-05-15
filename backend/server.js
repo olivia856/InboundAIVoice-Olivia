@@ -353,13 +353,20 @@ app.get('/api/clients/:slug', async (req, res) => {
 app.post('/api/twilio/inbound', async (req, res) => {
     try {
         const { To, From, CallSid } = req.body;
-        console.log(`[Twilio Inbound] Incoming call from ${From} to ${To} (Sid: ${CallSid})`);
+        if (!To) {
+            console.error("[Twilio Inbound] Missing 'To' number in request body.");
+            res.set('Content-Type', 'text/xml');
+            return res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response><Say>Incoming call error: missing destination number.</Say></Response>`);
+        }
+        
+        console.log(`[Twilio Inbound] Incoming call to ${To}. (Sid: ${CallSid})`);
 
         // 0. Find the Client by Twilio Number (Inbound Routing)
-        const { data: client } = await supabase.from('clients').select('*').eq('twilio_phone', To).maybeSingle();
-        const clientId = client?.client_code || null; 
+        const { data: client, error: clientErr } = await supabase.from('clients').select('*').eq('twilio_phone', To).maybeSingle();
+        if (clientErr) console.error("[Twilio Inbound] Database Error during client lookup:", clientErr);
         
-        console.log(`[Twilio Inbound] Incoming call to ${To}. Resolved Client: ${clientId || 'NONE'}`);
+        const clientId = client?.client_code || null; 
+        console.log(`[Twilio Inbound] Resolved Client: ${clientId || 'NONE'}`);
 
         if (client && client.agent_enabled === false) {
             console.log(`[Twilio Inbound] AI Agent is paused for ${To}. Rejecting call.`);
@@ -678,14 +685,16 @@ app.post('/api/twilio/inbound', async (req, res) => {
         console.log("Audio Stream successfully relayed to Ultravox!");
 
     } catch (error) {
-        console.error("Ultravox Connection Error:", error);
-        // If it was a 400 error from Ultravox, log the body to see WHY they rejected it
-        if (error.response) {
-            const body = await error.response.text();
-            console.error("Ultravox API Rejected Request:", body);
+        console.error("[Twilio Inbound] CRITICAL ERROR:", error.message);
+        // Safely try to log Ultravox error details if available
+        if (error.response && typeof error.response.text === 'function') {
+            try {
+                const body = await error.response.text();
+                console.error("Ultravox API Error Body:", body);
+            } catch (e) {}
         }
         res.set('Content-Type', 'text/xml');
-        res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response><Say>A system error occurred while connecting the AI.</Say></Response>`);
+        return res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response><Say>A server error occurred while connecting the AI. Error: ${error.message}</Say></Response>`);
     }
 });
 
@@ -1045,9 +1054,9 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
         res.send(twiml);
 
     } catch (err) {
-        console.error("Outbound TwiML Webhook Error:", err);
+        console.error("[Twilio Outbound-TWIML] CRITICAL ERROR:", err.message);
         res.set('Content-Type', 'text/xml');
-        res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response><Say>A system error occurred while loading the AI.</Say></Response>`);
+        return res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response><Say>A server error occurred in the outbound T W I M L handler. Error: ${err.message}</Say></Response>`);
     }
 });
 
