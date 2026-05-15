@@ -1049,7 +1049,8 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
         if (!joinUrl) {
             console.error("[Ultravox Outbound Error] Failed to generate joinUrl:", uvData);
             res.set('Content-Type', 'text/xml');
-            return res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response><Say>The A I engine returned an error. Please check server logs.</Say></Response>`);
+            const safeData = JSON.stringify(uvData).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+            return res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response><Say>API Error: ${safeData}</Say></Response>`);
         }
 
         const safeJoinUrl = joinUrl.replace(/&/g, '&amp;');
