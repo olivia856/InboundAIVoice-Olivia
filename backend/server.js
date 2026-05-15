@@ -458,7 +458,7 @@ app.post('/api/twilio/inbound', async (req, res) => {
                             required: true
                         }
                     ],
-                    http: { httpMethod: "POST", baseUrlPattern: `${baseUrl}/api/tools/availability?client_id=${clientId}` }
+                    http: { httpMethod: "POST", baseUrlPattern: clientId ? `${baseUrl}/api/tools/availability/${clientId}` : `${baseUrl}/api/tools/availability` }
                 }
             },
             {
@@ -491,7 +491,7 @@ app.post('/api/twilio/inbound', async (req, res) => {
                             required: false
                         }
                     ],
-                    http: { httpMethod: "POST", baseUrlPattern: `${baseUrl}/api/tools/book?client_id=${clientId}` }
+                    http: { httpMethod: "POST", baseUrlPattern: clientId ? `${baseUrl}/api/tools/book/${clientId}` : `${baseUrl}/api/tools/book` }
                 }
             },
             {
@@ -596,7 +596,7 @@ app.post('/api/twilio/inbound', async (req, res) => {
                     dynamicParameters: [
                         { name: "query", location: "PARAMETER_LOCATION_BODY", schema: { type: "string", description: "The specific question or search term" }, required: true }
                     ],
-                    http: { httpMethod: "POST", baseUrlPattern: `${baseUrl}/api/tools/query-corpus?client_id=${clientId}` }
+                    http: { httpMethod: "POST", baseUrlPattern: clientId ? `${baseUrl}/api/tools/query-corpus/${clientId}` : `${baseUrl}/api/tools/query-corpus` }
                 }
             });
         }
@@ -875,7 +875,7 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
                             required: true
                         }
                     ],
-                    http: { httpMethod: "POST", baseUrlPattern: `${baseUrl}/api/tools/availability?client_id=${clientId}` }
+                    http: { httpMethod: "POST", baseUrlPattern: clientId ? `${baseUrl}/api/tools/availability/${clientId}` : `${baseUrl}/api/tools/availability` }
                 }
             },
             {
@@ -902,7 +902,7 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
                             required: false
                         }
                     ],
-                    http: { httpMethod: "POST", baseUrlPattern: `${baseUrl}/api/tools/book?client_id=${clientId}` }
+                    http: { httpMethod: "POST", baseUrlPattern: clientId ? `${baseUrl}/api/tools/book/${clientId}` : `${baseUrl}/api/tools/book` }
                 }
             },
             {
@@ -1006,7 +1006,7 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
                     dynamicParameters: [
                         { name: "query", location: "PARAMETER_LOCATION_BODY", schema: { type: "string", description: "The specific question or search term" }, required: true }
                     ],
-                    http: { httpMethod: "POST", baseUrlPattern: `${baseUrl}/api/tools/query-corpus?client_id=${clientId}` }
+                    http: { httpMethod: "POST", baseUrlPattern: clientId ? `${baseUrl}/api/tools/query-corpus/${clientId}` : `${baseUrl}/api/tools/query-corpus` }
                 }
             });
         }
@@ -1244,7 +1244,8 @@ app.post('/api/agent', async (req, res) => {
 });
 
 // Twilio Call Status Webhook (Hangs up, fetches Summary from Ultravox!)
-app.post('/api/twilio/status', async (req, res) => {
+app.post('/api/twilio/status/:client_id?', async (req, res) => {
+    const client_id = req.params.client_id || req.body.client_id;
     const callSid = req.body.CallSid;
     const callDuration = req.body.CallDuration || 0;
     const callStatus = req.body.CallStatus; // 'completed'
@@ -1404,9 +1405,10 @@ function forceIST(dateStr) {
     return s;
 }
 
-app.post('/api/tools/availability', async (req, res) => {
+app.post('/api/tools/availability/:client_id?', async (req, res) => {
     try {
-        const { target_date, client_id } = req.body;
+        const client_id = req.params.client_id || req.body.client_id;
+        const { target_date } = req.body;
         console.log(`[AI TOOL] 🔍 Availability check requested for: ${target_date}`);
         
         if (!target_date || !target_date.match(/^\d{4}-\d{2}-\d{2}$/)) {
@@ -1542,12 +1544,10 @@ function repairEmail(raw) {
     if (e.includes('hotmailcom')) e = e.replace('hotmailcom', 'hotmail.com');
     if (e.includes('icloudcom')) e = e.replace('icloudcom', 'icloud.com');
 
-    return e;
-}
-
-app.post('/api/tools/book', async (req, res) => {
+app.post('/api/tools/book/:client_id?', async (req, res) => {
     try {
-        let { start_time, name, phone, client_id } = req.body;
+        const client_id = req.params.client_id || req.body.client_id;
+        let { start_time, name, phone } = req.body;
         
         // HYPER-RESILIENT: Extract using the new Repair-First logic
         let email = extractEmailFromBody(req.body);
