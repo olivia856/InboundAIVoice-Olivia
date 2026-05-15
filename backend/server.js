@@ -376,15 +376,20 @@ app.post('/api/twilio/inbound', async (req, res) => {
             return res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response><Reject reason="busy"/></Response>`);
         }
 
-        // 1. Fetch Integration Keys from Database (Priority: Client -> Platform -> Env)
-        const { data: clientUV } = await supabase.from('integrations').select('*').eq('provider', 'ultravox').eq('client_id', clientId).maybeSingle();
-        const platformUV = await getPlatformKey('ultravox');
-        const ACTIVE_ULTRAVOX_KEY = clientUV?.api_key || platformUV?.api_key || process.env.ULTRAVOX_API_KEY;
+        // 1. Determine key and base URL
+        let ACTIVE_ULTRAVOX_KEY = process.env.ULTRAVOX_API_KEY;
+        try {
+            const { data: clientUV } = await supabase.from('integrations').select('*').eq('provider', 'ultravox').eq('client_id', clientId).maybeSingle();
+            const platformUV = await getPlatformKey('ultravox');
+            ACTIVE_ULTRAVOX_KEY = clientUV?.api_key || platformUV?.api_key || ACTIVE_ULTRAVOX_KEY;
+        } catch (dbErr) {
+            console.error("[Twilio Inbound] Key lookup error:", dbErr.message);
+        }
 
         if (!ACTIVE_ULTRAVOX_KEY) {
-            console.error("Ultravox API key is completely missing. Add it in the Dashboard's API Credentials page.");
+            console.error("[Twilio Inbound] CRITICAL: No Ultravox key found.");
             res.set('Content-Type', 'text/xml');
-            return res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response><Say>The platform AI key is missing. Please contact support.</Say></Response>`);
+            return res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response><Say>AI configuration is missing. Please contact support.</Say></Response>`);
         }
 
         // 2. Check database for Custom System Prompt and settings for THIS client
@@ -429,10 +434,12 @@ app.post('/api/twilio/inbound', async (req, res) => {
         
         finalPrompt += "\n\nMULTILINGUAL DIRECTIVE: You are a multilingual AI. You MUST automatically detect whether the caller is speaking English or Serbian. If they speak Serbian, you MUST reply natively in Serbian. If they speak English, reply in English. Match their language exactly at all times.";
 
-        // Use BACKEND_URL if set, otherwise fallback to request host.
-        // Prefer HTTPS if BACKEND_URL is not set but request host is available.
-        let baseUrl = req.get('host') ? `https://${req.get('host')}` : '';
-        if (BACKEND_URL && !BACKEND_URL.includes('your-server.com')) baseUrl = BACKEND_URL;
+        let baseUrl = `https://${req.get('host')}`;
+        if (process.env.BACKEND_URL && !process.env.BACKEND_URL.includes('your-server.com')) {
+            baseUrl = process.env.BACKEND_URL.replace(/\/$/, '');
+        } else if (process.env.SERVER_BASE_URL && !process.env.SERVER_BASE_URL.includes('your-server.com')) {
+            baseUrl = process.env.SERVER_BASE_URL.replace(/\/$/, '');
+        }
         console.log(`[Ultravox] Creating session with tools/callbacks at: ${baseUrl}`);
         
         const finalVoice = agentData?.voice_preset || "Mark";
@@ -451,7 +458,7 @@ app.post('/api/twilio/inbound', async (req, res) => {
                             required: true
                         }
                     ],
-                    http: { httpMethod: "POST", baseUrlPattern: `${baseUrl}/api/tools/availability` }
+                    http: { httpMethod: "POST", baseUrlPattern: `${baseUrl}/api/tools/availability?client_id=${clientId}` }
                 }
             },
             {
@@ -484,7 +491,7 @@ app.post('/api/twilio/inbound', async (req, res) => {
                             required: false
                         }
                     ],
-                    http: { httpMethod: "POST", baseUrlPattern: `${baseUrl}/api/tools/book` }
+                    http: { httpMethod: "POST", baseUrlPattern: `${baseUrl}/api/tools/book?client_id=${clientId}` }
                 }
             },
             {
@@ -589,7 +596,7 @@ app.post('/api/twilio/inbound', async (req, res) => {
                     dynamicParameters: [
                         { name: "query", location: "PARAMETER_LOCATION_BODY", schema: { type: "string", description: "The specific question or search term" }, required: true }
                     ],
-                    http: { httpMethod: "POST", baseUrlPattern: `${baseUrl}/api/tools/query-corpus` }
+                    http: { httpMethod: "POST", baseUrlPattern: `${baseUrl}/api/tools/query-corpus?client_id=${clientId}` }
                 }
             });
         }
@@ -781,14 +788,20 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
     try {
         const { toPhone, voice: reqVoice, goal: reqGoal, name: reqName, client_id } = req.query;
 
-        // 1. Fetch Ultravox Key (Priority: Client -> Platform -> Env)
-        const { data: clientUV2 } = await supabase.from('integrations').select('*').eq('provider', 'ultravox').eq('client_id', client_id).maybeSingle();
-        const platformUV2 = await getPlatformKey('ultravox');
-        const ACTIVE_ULTRAVOX_KEY = clientUV2?.api_key || platformUV2?.api_key || process.env.ULTRAVOX_API_KEY;
+        // 1. Determine key and base URL
+        let ACTIVE_ULTRAVOX_KEY = process.env.ULTRAVOX_API_KEY;
+        try {
+            const { data: clientUV2 } = await supabase.from('integrations').select('*').eq('provider', 'ultravox').eq('client_id', client_id).maybeSingle();
+            const platformUV2 = await getPlatformKey('ultravox');
+            ACTIVE_ULTRAVOX_KEY = clientUV2?.api_key || platformUV2?.api_key || ACTIVE_ULTRAVOX_KEY;
+        } catch (dbErr) {
+            console.error("[Twilio Outbound] Key lookup error:", dbErr.message);
+        }
 
         if (!ACTIVE_ULTRAVOX_KEY) {
+            console.error("[Twilio Outbound] CRITICAL: No Ultravox key found.");
             res.set('Content-Type', 'text/xml');
-            return res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response><Say>The platform AI key is missing. Please contact support.</Say></Response>`);
+            return res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response><Say>AI configuration is missing. Please contact support.</Say></Response>`);
         }
 
         // 1. Resolve Client & Prompt settings
@@ -858,7 +871,7 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
                             required: true
                         }
                     ],
-                    http: { httpMethod: "POST", baseUrlPattern: `${baseUrl}/api/tools/availability` }
+                    http: { httpMethod: "POST", baseUrlPattern: `${baseUrl}/api/tools/availability?client_id=${clientId}` }
                 }
             },
             {
@@ -885,7 +898,7 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
                             required: false
                         }
                     ],
-                    http: { httpMethod: "POST", baseUrlPattern: `${baseUrl}/api/tools/book` }
+                    http: { httpMethod: "POST", baseUrlPattern: `${baseUrl}/api/tools/book?client_id=${clientId}` }
                 }
             },
             {
@@ -989,7 +1002,7 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
                     dynamicParameters: [
                         { name: "query", location: "PARAMETER_LOCATION_BODY", schema: { type: "string", description: "The specific question or search term" }, required: true }
                     ],
-                    http: { httpMethod: "POST", baseUrlPattern: `${baseUrl}/api/tools/query-corpus` }
+                    http: { httpMethod: "POST", baseUrlPattern: `${baseUrl}/api/tools/query-corpus?client_id=${clientId}` }
                 }
             });
         }
@@ -1029,9 +1042,12 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
         const joinUrl = uvData.joinUrl;
         
         if (!joinUrl) {
-            console.error("Ultravox API failed:", uvData);
+            console.error("[Ultravox Outbound Error] Failed to generate joinUrl:", uvData);
+            let errorMsg = "The AI engine returned an error.";
+            if (uvData.error) errorMsg += " Details: " + (uvData.error.message || JSON.stringify(uvData.error));
+            
             res.set('Content-Type', 'text/xml');
-            return res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response><Say>The AI engine returned an error. Check server logs.</Say></Response>`);
+            return res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response><Say>${errorMsg}. Check server logs.</Say></Response>`);
         }
 
         const safeJoinUrl = joinUrl.replace(/&/g, '&amp;');
