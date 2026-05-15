@@ -60,6 +60,35 @@ async function getS3Client() {
     return client;
 }
 
+// --- PLATFORM KEY HELPER ---
+// Reads the API key for a given provider from platform_settings table (super admin settings)
+// Falls back to integrations table (client_id IS NULL means platform-level) then env vars.
+async function getPlatformKey(provider) {
+    try {
+        const { data } = await supabase
+            .from('platform_settings')
+            .select('api_key, meta_data')
+            .eq('provider', provider)
+            .maybeSingle();
+        if (data && data.api_key && data.api_key.length > 10) return data;
+    } catch (e) {
+        console.warn(`[getPlatformKey] platform_settings lookup failed for ${provider}:`, e.message);
+    }
+    // Also try integrations table with no client_id (platform-level row)
+    try {
+        const { data } = await supabase
+            .from('integrations')
+            .select('api_key, meta_data')
+            .eq('provider', provider)
+            .is('client_id', null)
+            .maybeSingle();
+        if (data && data.api_key && data.api_key.length > 10) return data;
+    } catch (e) {
+        console.warn(`[getPlatformKey] integrations lookup failed for ${provider}:`, e.message);
+    }
+    return null;
+}
+
 // --- OMNICHANNEL NOTIFICATIONS ENGINE ---
 async function dispatchOmnichannel(appointmentId, name, phone, email, templateType, dynamicData) {
     console.log(`[Omnichannel] Dispatching ${templateType} for ${name} (ID: ${appointmentId})`);
