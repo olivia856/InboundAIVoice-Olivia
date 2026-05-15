@@ -1578,6 +1578,9 @@ function repairEmail(raw) {
     if (e.includes('hotmailcom')) e = e.replace('hotmailcom', 'hotmail.com');
     if (e.includes('icloudcom')) e = e.replace('icloudcom', 'icloud.com');
 
+    return e;
+}
+
 app.post('/api/tools/book/:client_id?', async (req, res) => {
     try {
         const client_id = req.params.client_id || req.body.client_id;
