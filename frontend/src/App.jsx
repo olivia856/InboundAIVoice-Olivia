@@ -1845,14 +1845,14 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                         <td className="py-4 px-5 min-w-[200px]">
                            <div className="bg-sidebar/30 rounded-lg px-2 py-1 border border-border/50 max-w-[200px]">
                               <audio controls className="w-full h-8 scale-90 origin-left">
-                                <source src={c.recording_url} type="audio/mpeg" />
+                                <source src={c.recording_url.includes('api.twilio.com') ? `${API_BASE}/api/recordings/${c.twilio_sid}` : c.recording_url} type="audio/mpeg" />
                               </audio>
                            </div>
                         </td>
                         <td className="py-4 px-5 text-right">
                           <div className="flex justify-end gap-2">
                              <button onClick={() => setViewSummaryModal(c)} className="bg-white/5 hover:bg-white/10 text-[10px] font-bold px-3 py-1.5 rounded-lg border border-border transition-colors uppercase tracking-wider">Summary</button>
-                             <a href={c.recording_url} target="_blank" rel="noreferrer" className="p-2 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-lg transition-all">
+                             <a href={c.recording_url.includes('api.twilio.com') ? `${API_BASE}/api/recordings/${c.twilio_sid}` : c.recording_url} target="_blank" rel="noreferrer" className="p-2 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-lg transition-all">
                                <Download size={14} />
                              </a>
                           </div>

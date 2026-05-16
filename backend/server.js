@@ -687,8 +687,7 @@ app.post('/api/twilio/inbound', async (req, res) => {
                 medium: { twilio: {} },
                 selectedTools: selectedTools,
                 inactivityMessages: [
-                    { duration: '20s', message: "Are you still there? I haven't heard from you." },
-                    { duration: '20s', message: "It seems you may have stepped away. Goodbye!", endBehavior: 'END_BEHAVIOR_HANG_UP' }
+                    { duration: '20s', message: "Are you still there? I haven't heard from you." }
                 ],
                 maxDuration: '1800s'
             })
@@ -1102,8 +1101,7 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
                 medium: { twilio: {} },
                 selectedTools: selectedTools,
                 inactivityMessages: [
-                    { duration: '20s', message: "Are you still there?" },
-                    { duration: '20s', message: "It seems you may have stepped away. Goodbye!", endBehavior: 'END_BEHAVIOR_HANG_UP' }
+                    { duration: '20s', message: "Are you still there?" }
                 ],
                 maxDuration: '1800s'
             })
@@ -1214,6 +1212,48 @@ app.get('/api/calls', async (req, res) => {
         res.json({ success: true, calls: data });
     } catch (err) {
         res.status(500).json({ error: err.message });
+    }
+});
+
+// Proxy Twilio Recordings securely
+app.get('/api/recordings/:callSid', async (req, res) => {
+    try {
+        const { callSid } = req.params;
+        const { data: call } = await supabase.from('calls').select('*').eq('twilio_sid', callSid).maybeSingle();
+        
+        if (!call || !call.recording_url) {
+            return res.status(404).send('Recording not found');
+        }
+
+        if (!call.recording_url.includes('api.twilio.com')) {
+            return res.redirect(call.recording_url); // Redirect to S3 if upgraded
+        }
+
+        // Fetch credentials
+        const { data: twInt } = await supabase.from('integrations').select('*').eq('provider', 'twilio').eq('client_id', call.client_id).maybeSingle();
+        const platformTw = await getPlatformKey('twilio');
+        const TW_SID = twInt?.meta_data?.sid || platformTw?.meta_data?.sid || process.env.TWILIO_ACCOUNT_SID;
+        const TW_AUTH = twInt?.api_key || platformTw?.api_key || process.env.TWILIO_AUTH_TOKEN;
+
+        if (!TW_SID || !TW_AUTH) {
+            return res.status(401).send('Telephony credentials missing');
+        }
+
+        const axios = require('axios');
+        const response = await axios({
+            method: 'get',
+            url: call.recording_url,
+            responseType: 'stream',
+            auth: { username: TW_SID, password: TW_AUTH }
+        });
+
+        res.setHeader('Content-Type', 'audio/mpeg');
+        res.setHeader('Content-Disposition', `inline; filename="recording_${callSid}.mp3"`);
+        response.data.pipe(res);
+
+    } catch (err) {
+        console.error("[Recording Proxy] Error fetching recording:", err.message);
+        res.status(500).send("Error fetching recording stream");
     }
 });
 
