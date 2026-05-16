@@ -20,6 +20,46 @@ const toYYYYMMDD = (date) => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
+// Inbound Webhook URL Card Component
+function InboundWebhookCard({ clientId, apiBase }) {
+  const [webhookUrl, setWebhookUrl] = React.useState('');
+  const [copied, setCopied] = React.useState(false);
+  React.useEffect(() => {
+    if (!clientId) return;
+    fetch(`${apiBase}/api/inbound-webhook-url?client_id=${clientId}`)
+      .then(r => r.json())
+      .then(d => { if (d.success) setWebhookUrl(d.webhook_url); })
+      .catch(() => {});
+  }, [clientId, apiBase]);
+  const copy = () => {
+    if (!webhookUrl) return;
+    navigator.clipboard.writeText(webhookUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+  return (
+    <div className="bg-gradient-to-br from-primary/5 to-purple-500/5 border border-primary/20 rounded-2xl p-8 shadow-premium-lg mb-8">
+      <h3 className="text-sm font-bold uppercase tracking-widest mb-2 flex items-center gap-2">
+        <span className="text-primary">📞</span> Inbound Call Webhook URL
+      </h3>
+      <p className="text-xs text-muted-foreground mb-5 leading-relaxed">
+        Copy this URL and paste it as the <strong>Voice Webhook URL</strong> in your Twilio phone number settings. Anyone who calls your Twilio number will be connected to your AI agent.
+      </p>
+      <div className="flex items-center gap-2">
+        <code className="flex-1 bg-background border border-border rounded-xl px-4 py-3 text-xs font-mono text-primary break-all select-all">
+          {webhookUrl || 'Loading...'}
+        </code>
+        <button onClick={copy} className={`shrink-0 px-4 py-3 rounded-xl text-xs font-bold border transition-all ${copied ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-primary/10 text-primary border-primary/30 hover:bg-primary/20'}`}>
+          {copied ? '✓ Copied' : 'Copy'}
+        </button>
+      </div>
+      <p className="text-[10px] text-muted-foreground mt-3 italic">
+        In Twilio Console → Phone Numbers → Your Number → Voice Configuration → set webhook to: POST
+      </p>
+    </div>
+  );
+}
+
 function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
   const [activePage, setActivePage] = useState('dashboard');
   const [agentEnabled, setAgentEnabled] = useState(user?.agentEnabled !== false);
@@ -1063,7 +1103,7 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                   <div>
                     <label className="block text-xs font-bold text-muted-foreground uppercase mb-2">Voice Model</label>
                     <select name="voice" defaultValue={agentSettings.voice_preset} className="w-full bg-background border border-border rounded-lg p-3 text-sm outline-none">
-                      <optgroup label="Standard Ultravox Voices">
+                      <optgroup label="Standard AI Voices">
                         <option value="9ed99f35-ddd5-4efb-9c62-9ce9483bab61">🇺🇸 Mark (Male, Professional)</option>
                         <option value="terrence">🇺🇸 Terrence (Male, Deep)</option>
                         <option value="b28f7f08-685c-4219-a2a0-c539b985b9fd">🇺🇸 Alex (Male, Friendly)</option>
@@ -1401,7 +1441,7 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                       try {
                         const res = await fetch(`${API_BASE}/api/corpora/upload`, { method: 'POST', body: formData });
                         const d = await res.json();
-                        if (d.success) { showToast('File uploaded to Ultravox Corpus!', 'success'); setCorpusFile(null); }
+                        if (d.success) { showToast('File added to AI Knowledge Base!', 'success'); setCorpusFile(null); }
                         else showToast(d.error || 'Upload failed', 'error');
                       } catch(ex) { showToast('Upload failed', 'error'); }
                     }} className="bg-primary text-white font-semibold rounded-lg px-6 py-2.5 text-sm">Upload to Agent</button>
@@ -1537,7 +1577,7 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
               <div className="grid grid-cols-2 gap-4">
                 <input name="campaign_name" placeholder="Campaign Name (e.g. Past Clients Follow-up)" className="w-full bg-background border border-border p-3 rounded-lg text-sm outline-none" required />
                 <select name="campaign_voice" className="w-full bg-background border border-border p-3 rounded-lg text-sm outline-none">
-                  <optgroup label="Standard Ultravox Voices">
+                  <optgroup label="Standard AI Voices">
                     <option value="9ed99f35-ddd5-4efb-9c62-9ce9483bab61">🇺🇸 Mark (Male, Professional)</option>
                     <option value="terrence">🇺🇸 Terrence (Male, Deep)</option>
                     <option value="b28f7f08-685c-4219-a2a0-c539b985b9fd">🇺🇸 Alex (Male, Friendly)</option>
@@ -1899,19 +1939,23 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
               </form>
             </div>
 
-            {/* --- ULTRAVOX CONFIG --- */}
+            {/* --- INBOUND WEBHOOK URL --- */}
+            <InboundWebhookCard clientId={user?.client_code || user?.clientCode} apiBase={API_BASE} />
+
+            {/* --- AZLON AI ENGINE CONFIG (hidden branding) --- */}
             <div className="bg-card border border-border rounded-2xl p-8 shadow-premium-lg mb-8">
               <h3 className="text-sm font-bold uppercase tracking-widest mb-6 flex items-center gap-2">
-                <Sparkles size={16} className="text-primary" /> Ultravox AI Engine
+                <Sparkles size={16} className="text-primary" /> Azlon AI Engine
               </h3>
               <form onSubmit={saveUVConfig} className="space-y-5">
                 <div>
-                  <label className="block text-[10px] font-bold text-muted-foreground uppercase tracking-ultra mb-2">Ultravox API Key</label>
-                  <input type="password" value={uvConfig.api_key} onChange={(e) => setUVConfig({...uvConfig, api_key: e.target.value})} placeholder="uv_live_..." className="w-full bg-background border border-border p-3 rounded-xl text-sm outline-none focus:border-primary transition-all font-mono" required />
+                  <label className="block text-[10px] font-bold text-muted-foreground uppercase tracking-ultra mb-2">Azlon Secret Key</label>
+                  <input type="password" value={uvConfig.api_key} onChange={(e) => setUVConfig({...uvConfig, api_key: e.target.value})} placeholder="••••••••••••" className="w-full bg-background border border-border p-3 rounded-xl text-sm outline-none focus:border-primary transition-all font-mono" required />
+                  <p className="text-[10px] text-muted-foreground mt-2 italic">Your unique AI engine secret key provided by your administrator.</p>
                 </div>
                 <div className="pt-2">
                   <button type="submit" disabled={isSavingUV} className="w-full bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 font-bold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2">
-                    {isSavingUV ? 'Saving...' : 'Update Ultravox Keys'}
+                    {isSavingUV ? 'Saving...' : 'Update AI Engine Key'}
                   </button>
                 </div>
               </form>

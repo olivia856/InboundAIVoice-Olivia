@@ -23,7 +23,18 @@ app.get('/', (req, res) => {
 
 // Version endpoint for deployment verification
 app.get('/api/version', (req, res) => {
-    res.json({ version: '2.5', build: 'path-params-fix', timestamp: new Date().toISOString() });
+    res.json({ version: '2.6', build: 'multi-tenant-fixes', timestamp: new Date().toISOString() });
+});
+
+// Inbound Webhook URL for clients to paste in Twilio
+app.get('/api/inbound-webhook-url', (req, res) => {
+    const { client_id } = req.query;
+    let baseUrl = process.env.BACKEND_URL || `https://${req.get('host')}`;
+    baseUrl = baseUrl.replace(/\/$/, '');
+    const webhookUrl = client_id
+        ? `${baseUrl}/api/twilio/inbound?client_id=${client_id}`
+        : `${baseUrl}/api/twilio/inbound`;
+    res.json({ success: true, webhook_url: webhookUrl });
 });
 
 const PORT = 8000;
@@ -462,11 +473,15 @@ app.post('/api/twilio/inbound', async (req, res) => {
         6. CRITICAL - ONE BOOKING ONLY: Call 'book_appointment' EXACTLY ONCE per caller per slot. NEVER retry, NEVER call it twice. If you get a conflict error, offer the caller a DIFFERENT time slot instead of retrying the same one.
         7. APPOINTMENT MODIFICATION/CANCELLATION: If a caller wants to update or delete their appointment, you MUST verify their identity by asking for their Name and Phone number first. Only call 'update_appointment' or 'delete_appointment' AFTER they provide this verification.`;
         
-        finalPrompt += "\n\nULTRA-IMPORTANT - CALL TERMINATION: As soon as you say a FINAL goodbye at the end of a session (e.g., 'Have a great day!' or 'Goodbye') or the caller says goodbye, you MUST call 'hang_up' IMMEDIATELY. Never wait for the caller to hang up first. This is critical to reduce telephony costs.";
-        
+        finalPrompt += `\n\nSILENCE & GOODBYE PROTOCOL (CRITICAL):
+- If the caller says "bye", "goodbye", "thank you bye", "ok bye", "see you", or similar farewell words, say a warm one-sentence goodbye THEN IMMEDIATELY call hang_up.
+- Do NOT continue the conversation after goodbye.
+- If the caller is completely silent for 15 seconds or more, politely say "I haven't heard from you, take care, goodbye!" then IMMEDIATELY call hang_up.
+- Never wait for the caller to disconnect. You must hang up proactively.`;
+
         finalPrompt += "\n\nHUMAN TRANSFER: If the caller explicitly asks to speak to a real person, a human, or a manager, or if they have a complex technical issue that you cannot solve using the knowledge base, tell them 'I will transfer you to one of our specialists now' and then IMMEDIATELY call 'transfer_call'.";
         
-        finalPrompt += "\n\nMULTILINGUAL DIRECTIVE: You are a multilingual AI. You MUST automatically detect whether the caller is speaking English or Serbian. If they speak Serbian, you MUST reply natively in Serbian. If they speak English, reply in English. Match their language exactly at all times.";
+        finalPrompt += "\n\nMULTILINGUAL DIRECTIVE: Automatically detect the caller's language and reply in the same language at all times.";
 
         let baseUrl = `https://${req.get('host')}`;
         if (process.env.BACKEND_URL && !process.env.BACKEND_URL.includes('your-server.com')) {
@@ -651,17 +666,19 @@ app.post('/api/twilio/inbound', async (req, res) => {
 
         const uvResponse = await fetch('https://api.ultravox.ai/api/calls', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-API-Key': ACTIVE_ULTRAVOX_KEY
-            },
+            headers: { 'Content-Type': 'application/json', 'X-API-Key': ACTIVE_ULTRAVOX_KEY },
             body: JSON.stringify({
                 systemPrompt: finalPrompt,
                 voice: finalUltravoxVoice,
                 temperature: agentData?.temperature || 0.3,
                 firstSpeaker: "FIRST_SPEAKER_AGENT",
                 medium: { twilio: {} },
-                selectedTools: selectedTools
+                selectedTools: selectedTools,
+                inactivityMessages: [
+                    { duration: '20s', message: "Are you still there? I haven't heard from you." },
+                    { duration: '20s', message: "It seems you may have stepped away. Goodbye!", endBehavior: 'END_BEHAVIOR_HANG_UP' }
+                ],
+                maxDuration: '1800s'
             })
         });
 
@@ -1071,7 +1088,12 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
                 temperature: agentData?.temperature || 0.3,
                 firstSpeaker: "FIRST_SPEAKER_AGENT",
                 medium: { twilio: {} },
-                selectedTools: selectedTools
+                selectedTools: selectedTools,
+                inactivityMessages: [
+                    { duration: '20s', message: "Are you still there?" },
+                    { duration: '20s', message: "It seems you may have stepped away. Goodbye!", endBehavior: 'END_BEHAVIOR_HANG_UP' }
+                ],
+                maxDuration: '1800s'
             })
         });
 
