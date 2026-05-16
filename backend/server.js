@@ -109,41 +109,53 @@ async function getPlatformKey(provider) {
 async function dispatchOmnichannel(appointmentId, name, phone, email, templateType, dynamicData) {
     console.log(`[Omnichannel] Dispatching ${templateType} for ${name} (ID: ${appointmentId})`);
 
-    // --- 1. Fetch Integration Keys ---
-    const { data: twInt } = await supabase.from('integrations').select('*').eq('provider', 'twilio').maybeSingle();
-    const { data: reInt } = await supabase.from('integrations').select('*').eq('provider', 'resend').maybeSingle();
-    const { data: gmInt } = await supabase.from('integrations').select('*').eq('provider', 'gmail').maybeSingle();
-    const TWILIO_SID = twInt?.meta_data?.sid || process.env.TWILIO_ACCOUNT_SID;
-    const TWILIO_AUTH = twInt?.api_key || process.env.TWILIO_AUTH_TOKEN;
-    const TWILIO_PHONE = twInt?.meta_data?.phone || process.env.TWILIO_PHONE_NUMBER;
-    const TWILIO_WHATSAPP_SENDER = twInt?.meta_data?.whatsapp_phone || process.env.TWILIO_WHATSAPP_SENDER || 'whatsapp:+16895880182'; 
-    
-    const RESEND_API_KEY = reInt?.api_key || process.env.RESEND_API_KEY;
-    const GMAIL_USER = gmInt?.meta_data?.user || gmInt?.meta_data?.email || process.env.GMAIL_USER;
-    const GMAIL_PASS = gmInt?.api_key || process.env.GMAIL_APP_PASSWORD;
+    // --- 0. Get client_id from appointment ---
+    let clientId = null;
+    let companyName = "our company";
+    if (appointmentId && appointmentId !== 'unknown') {
+        const { data: appt } = await supabase.from('appointments').select('client_id').eq('id', appointmentId).maybeSingle();
+        clientId = appt?.client_id || null;
+        if (clientId) {
+            const { data: client } = await supabase.from('clients').select('name').eq('client_code', clientId).maybeSingle();
+            if (client?.name) companyName = client.name;
+        }
+    }
+
+    // --- 1. Fetch Integration Keys (client-specific first, then platform fallback) ---
+    const { data: twInt } = clientId
+        ? await supabase.from('integrations').select('*').eq('provider', 'twilio').eq('client_id', clientId).maybeSingle()
+        : { data: null };
+    const { data: reInt } = clientId
+        ? await supabase.from('integrations').select('*').eq('provider', 'resend').eq('client_id', clientId).maybeSingle()
+        : { data: null };
+
+    // Platform fallbacks
+    const platformTw = await getPlatformKey('twilio');
+    const platformRe = await getPlatformKey('resend');
+
+    const TWILIO_SID = twInt?.meta_data?.sid || platformTw?.meta_data?.sid || process.env.TWILIO_ACCOUNT_SID;
+    const TWILIO_AUTH = twInt?.api_key || platformTw?.api_key || process.env.TWILIO_AUTH_TOKEN;
+    const TWILIO_PHONE = twInt?.meta_data?.phone || platformTw?.meta_data?.phone || process.env.TWILIO_PHONE_NUMBER;
+    const RESEND_API_KEY = reInt?.api_key || platformRe?.api_key || process.env.RESEND_API_KEY;
+    const TWILIO_WHATSAPP_SENDER = twInt?.meta_data?.whatsapp_phone || process.env.TWILIO_WHATSAPP_SENDER || 'whatsapp:+16895880182';
+
+    console.log(`[Omnichannel] Using client_id=${clientId}, companyName=${companyName}, TWILIO_SID=${TWILIO_SID ? 'set' : 'MISSING'}, TWILIO_PHONE=${TWILIO_PHONE || 'MISSING'}`);
+
+
+    const startTimeStr = dynamicData?.start_time ? new Date(dynamicData.start_time).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : "your scheduled time";
 
     let smsBody = "";
     let emailSubject = "";
     let emailHtml = "";
-    let companyName = "our company";
-    if (appointmentId && appointmentId !== 'unknown') {
-        const { data: appt } = await supabase.from('appointments').select('client_id').eq('id', appointmentId).maybeSingle();
-        if (appt && appt.client_id) {
-            const { data: client } = await supabase.from('clients').select('name').eq('client_code', appt.client_id).maybeSingle();
-            if (client && client.name) companyName = client.name;
-        }
-    }
-
-    const startTimeStr = dynamicData?.start_time ? new Date(dynamicData.start_time).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : "your scheduled time";
 
     if (templateType === 'booking_confirmed') {
         smsBody = `Hi ${name}, your ${companyName} appointment is confirmed for ${startTimeStr}. See you soon!`;
         emailSubject = `Your appointment is confirmed, ${name}!`;
         emailHtml = `<h2>Booking Confirmed</h2><p>Hi ${name},</p><p>We have successfully scheduled your appointment for <b>${startTimeStr}</b>.</p><p>We look forward to speaking with you.</p>`;
     } else if (templateType === 'meeting_reminder') {
-        smsBody = `Reminder: Hi ${name}, your meeting starts in 30 minutes at ${startTimeStr}. Please be ready.`;
-        emailSubject = `Reminder: Upcoming Meeting in 30 Minutes`;
-        emailHtml = `<h2>Meeting Reminder</h2><p>Hi ${name},</p><p>This is a quick reminder that your appointment is scheduled to start in 30 minutes at <b>${startTimeStr}</b>.</p>`;
+        smsBody = `Reminder: Hi ${name}, your appointment is in 15 minutes at ${startTimeStr}. Please be ready!`;
+        emailSubject = `Reminder: Your Appointment is in 15 Minutes`;
+        emailHtml = `<h2>Appointment Reminder</h2><p>Hi ${name},</p><p>This is a quick reminder that your appointment starts in <b>15 minutes</b> at <b>${startTimeStr}</b>. Please be ready!</p>`;
     } else if (templateType === 'meeting_missed') {
         smsBody = `Hi ${name}, we missed you at your meeting today. Let us know when you're free to reschedule!`;
         emailSubject = `Sorry we missed you, ${name}`;
@@ -1139,65 +1151,49 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
 // --- RECORDING CALLBACK: Move Twilio recordings to AWS S3 ---
 app.post('/api/twilio/recording-callback', async (req, res) => {
     try {
-        const { RecordingUrl, CallSid, RecordingSid } = req.body;
-        console.log(`[Recording] Callback for Call: ${CallSid} | Sid: ${RecordingSid}`);
+        const { RecordingUrl, CallSid, RecordingSid, RecordingStatus } = req.body;
+        console.log(`[Recording] Callback for Call: ${CallSid} | Sid: ${RecordingSid} | Status: ${RecordingStatus}`);
+        res.send("OK"); // Respond immediately to Twilio
 
-        // 1. Fetch Integration Keys
+        if (RecordingStatus !== 'completed' || !RecordingUrl) return;
+
+        // 1. Get client_id from call record
         const { data: callInfo } = await supabase.from('calls').select('client_id').eq('twilio_sid', CallSid).maybeSingle();
         const clientId = callInfo?.client_id;
-        
-        const { data: twInt } = await supabase.from('integrations').select('*').eq('provider', 'twilio').eq('client_id', clientId).maybeSingle();
-        const { data: awsInt } = await supabase.from('integrations').select('*').eq('provider', 'aws_s3').eq('client_id', clientId).maybeSingle();
-        
-        const platformTw = await getPlatformKey('twilio');
-        const platformAws = await getPlatformKey('aws_s3');
 
-        const TW_SID = twInt?.meta_data?.sid || platformTw?.meta_data?.sid || process.env.TWILIO_ACCOUNT_SID;
-        const TW_AUTH = twInt?.api_key || platformTw?.api_key || process.env.TWILIO_AUTH_TOKEN;
-        const S3_BUCKET = awsInt?.meta_data?.bucket || platformAws?.meta_data?.bucket || process.env.S3_BUCKET_NAME || process.env.AWS_S3_BUCKET;
+        // 2. ALWAYS save Twilio URL immediately (works without S3)
+        const twilioMp3Url = RecordingUrl + '.mp3';
+        await supabase.from('calls').update({ recording_url: twilioMp3Url }).eq('twilio_sid', CallSid);
+        console.log(`[Recording] Twilio URL saved for ${CallSid}: ${twilioMp3Url}`);
 
-        if (!TW_SID || !TW_AUTH || !S3_BUCKET) {
-            console.error("[Recording] Missing credentials to process recording.");
-            return res.status(500).send("Error");
-        }
+        // 3. Try S3 upload as enhancement (non-blocking)
+        try {
+            const { data: twInt } = await supabase.from('integrations').select('*').eq('provider', 'twilio').eq('client_id', clientId).maybeSingle();
+            const { data: awsInt } = await supabase.from('integrations').select('*').eq('provider', 'aws_s3').eq('client_id', clientId).maybeSingle();
+            const platformAws = await getPlatformKey('aws_s3');
+            const platformTw = await getPlatformKey('twilio');
 
-        // 2. Download from Twilio
-        const response = await axios({
-            method: 'get',
-            url: RecordingUrl + ".mp3", // Ask for MP3 to save space
-            responseType: 'arraybuffer',
-            auth: {
-                username: TW_SID,
-                password: TW_AUTH
+            const TW_SID = twInt?.meta_data?.sid || platformTw?.meta_data?.sid || process.env.TWILIO_ACCOUNT_SID;
+            const TW_AUTH = twInt?.api_key || platformTw?.api_key || process.env.TWILIO_AUTH_TOKEN;
+            const S3_BUCKET = awsInt?.meta_data?.bucket || platformAws?.meta_data?.bucket || process.env.S3_BUCKET_NAME;
+            const s3 = await getS3Client();
+
+            if (s3 && S3_BUCKET && TW_SID && TW_AUTH) {
+                const audioResp = await axios({ method: 'get', url: twilioMp3Url, responseType: 'arraybuffer', auth: { username: TW_SID, password: TW_AUTH } });
+                const key = `recordings/${clientId || 'platform'}/${CallSid}.mp3`;
+                await s3.send(new PutObjectCommand({ Bucket: S3_BUCKET, Key: key, Body: audioResp.data, ContentType: 'audio/mpeg' }));
+                const s3Url = `https://${S3_BUCKET}.s3.amazonaws.com/${key}`;
+                await supabase.from('calls').update({ recording_url: s3Url }).eq('twilio_sid', CallSid);
+                console.log(`[Recording] Upgraded to S3: ${s3Url}`);
             }
-        });
-
-        // 3. Upload to S3
-        const s3 = await getS3Client();
-        if (!s3) throw new Error("AWS S3 client failed to initialize.");
-
-        const isolatedFolder = clientId || 'platform';
-        const key = `recordings/${isolatedFolder}/${CallSid}.mp3`;
-        await s3.send(new PutObjectCommand({
-            Bucket: S3_BUCKET,
-            Key: key,
-            Body: response.data,
-            ContentType: 'audio/mpeg'
-        }));
-
-        const finalUrl = `https://${S3_BUCKET}.s3.amazonaws.com/${key}`;
-
-        // 4. Update Database
-        await supabase.from('calls').update({ 
-            recording_url: finalUrl
-        }).eq('twilio_sid', CallSid);
-
-        console.log(`[Recording] Successfully stored in S3: ${finalUrl}`);
-        res.send("OK");
+        } catch (s3Err) {
+            console.warn(`[Recording] S3 upload skipped (Twilio URL kept): ${s3Err.message}`);
+        }
     } catch (err) {
         console.error("[Recording] Error processing callback:", err);
         res.status(500).send("Error");
     }
+
 });
 
 // Fetch Call Logs - STRICTLY filtered by client_id for data isolation
@@ -2400,17 +2396,19 @@ cron.schedule('*/5 * * * *', async () => {
     console.log('[Cron] Checking for upcoming & missed appointments...');
     try {
         const now = new Date();
-        const thirtyMinsFromNow = new Date(now.getTime() + 35 * 60 * 1000);
+        const fifteenMinsFromNow = new Date(now.getTime() + 20 * 60 * 1000); // +20min window (catches 15min mark)
+        const fiveMinsFromNow = new Date(now.getTime() + 5 * 60 * 1000);   // lower bound
         const nowIso = now.toISOString();
-        const thirtyMinsIso = thirtyMinsFromNow.toISOString();
+        const fifteenMinsIso = fifteenMinsFromNow.toISOString();
+        const fiveMinsIso = fiveMinsFromNow.toISOString();
 
-        // 1. Upcoming Reminders (Starting between now and +35 mins)
+        // 1. Upcoming Reminders (Starting between now+5min and now+20min = ~15min window)
         const { data: upcoming } = await supabase.from('appointments')
             .select('*')
             .eq('status', 'confirmed')
             .eq('reminder_sent', false)
-            .gte('start_time', nowIso)
-            .lte('start_time', thirtyMinsIso);
+            .gte('start_time', fiveMinsIso)
+            .lte('start_time', fifteenMinsIso);
 
         if (upcoming && upcoming.length > 0) {
             for (const appt of upcoming) {

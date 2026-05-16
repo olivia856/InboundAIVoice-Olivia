@@ -381,21 +381,17 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
   };
 
   const navigation = [
-    { section: 'Overview' },
     { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
-    { id: 'reports', label: 'Reports', icon: Target },
     { id: 'calendar', label: 'Calendar', icon: Calendar },
-    { section: 'Configuration' },
     { id: 'agent', label: 'Inbound Agent', icon: Bot },
-    { id: 'knowledge_base', label: 'Knowledge Base', icon: BookOpen },
-    { id: 'credentials', label: 'API Credentials', icon: Key },
-    { section: 'Data' },
+    { id: 'campaigns', label: 'Outbound Campaigns', icon: Megaphone },
     { id: 'logs', label: 'Call Logs', icon: Phone },
+    { id: 'knowledge_base', label: 'Knowledge Base', icon: BookOpen },
     { id: 'leads', label: 'Lead CRM', icon: Target },
     { id: 'integrations_logs', label: 'Integrations', icon: Send },
-    { section: 'Calling' },
     { id: 'recordings', label: 'Voice Recordings', icon: Mic },
-    { id: 'campaigns', label: 'Outbound Campaigns', icon: Megaphone },
+    { id: 'reports', label: 'Reports', icon: TrendingUp },
+    { id: 'credentials', label: 'API Credentials', icon: Key },
   ];
 
   const { firstDay, daysInMonth } = getDaysInMonth(calendarDate);
@@ -1883,29 +1879,6 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
             <div>
               <h2 className="text-3xl font-extrabold tracking-tight">Integration Settings</h2>
               <p className="text-sm text-muted-foreground mt-1.5 font-medium">Configure your telephony and AI provider credentials</p>
-            </div>
-
-            {/* --- WEBHOOK DISCOVERY --- */}
-            <div className="bg-gradient-to-br from-primary/10 to-purple-500/10 border border-primary/20 rounded-2xl p-6 shadow-premium relative overflow-hidden">
-               <div className="absolute top-0 right-0 p-4 opacity-5"><Globe size={60} /></div>
-               <h3 className="text-sm font-bold text-primary uppercase tracking-widest mb-4 flex items-center gap-2">
-                 <Globe size={14} /> Inbound Webhook Setup
-               </h3>
-               <p className="text-xs text-muted-foreground mb-4 leading-relaxed">
-                 Copy this URL and paste it into your Twilio/Vobiz console under <strong>"A Call Comes In"</strong> to enable the AI Receptionist.
-               </p>
-               <div className="flex items-center gap-2 bg-background/50 border border-border p-2 rounded-xl">
-                 <code className="text-[11px] font-mono flex-1 truncate px-2">{`${API_BASE}/api/twilio/inbound`}</code>
-                 <button 
-                   onClick={() => {
-                     navigator.clipboard.writeText(`${API_BASE}/api/twilio/inbound`);
-                     showToast('Webhook URL copied to clipboard!', 'success');
-                   }}
-                   className="bg-primary hover:bg-primary/90 text-white text-[10px] font-bold px-4 py-2 rounded-lg transition-all shadow-glow"
-                 >
-                   Copy URL
-                 </button>
-               </div>
             </div>
 
             {/* --- TWILIO CONFIG --- */}
