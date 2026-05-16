@@ -228,8 +228,12 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
   const isPortalClient = !!((user?.client_code || user?.clientCode)); // any client account (portal URL or Login as)
 
   const fetchAll = () => {
-    const clientId = user?.client_code || (user?.client_code || user?.clientCode);
-    const query = clientId ? `?client_id=${clientId}` : '';
+    const clientId = user?.client_code || user?.clientCode;
+    if (!clientId) {
+      console.warn('[fetchAll] No client_id found - refusing to fetch to prevent data leak');
+      return;
+    }
+    const query = `?client_id=${clientId}`;
     
     fetch(`${API_BASE}/api/calls${query}`).then(r => r.json()).then(d => { if (d.success) setCallLogs(d.calls); }).catch(() => {});
     fetch(`${API_BASE}/api/contacts${query}`).then(r => r.json()).then(d => { if (d?.success) setContacts(d.contacts); }).catch(() => {});
@@ -1157,7 +1161,11 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                    <Download size={11}/> Export
                  </button>
                  <button 
-                   onClick={() => fetch(`${API_BASE}/api/calls`).then(r=>r.json()).then(d=>{if(d.success)setCallLogs(d.calls)})} 
+                    onClick={() => {
+                        const clientId = user?.client_code || user?.clientCode;
+                        if (!clientId) { showToast("Client ID missing", "error"); return; }
+                        fetch(`${API_BASE}/api/calls?client_id=${clientId}`).then(r=>r.json()).then(d=>{if(d.success)setCallLogs(d.calls)});
+                    }}
                    className="flex items-center gap-2 text-xs border border-border px-3 py-1.5 rounded-lg hover:text-primary transition"
                  >
                    <RefreshCw size={11}/> Sync

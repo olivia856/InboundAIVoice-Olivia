@@ -1178,13 +1178,20 @@ app.post('/api/twilio/recording-callback', async (req, res) => {
     }
 });
 
-// Fetch Call Logs mapping for the React Dashboard!
+// Fetch Call Logs - STRICTLY filtered by client_id for data isolation
 app.get('/api/calls', async (req, res) => {
     try {
         const { client_id } = req.query;
-        let query = supabase.from('calls').select('*').order('created_at', { ascending: false }).limit(100);
-        if (client_id) query = query.eq('client_id', client_id);
-        const { data, error } = await query;
+        // SECURITY: Never return all calls - require client_id
+        if (!client_id) {
+            console.warn('[/api/calls] Request without client_id rejected - data isolation enforced');
+            return res.json({ success: true, calls: [] });
+        }
+        const { data, error } = await supabase
+            .from('calls').select('*')
+            .eq('client_id', client_id)
+            .order('created_at', { ascending: false })
+            .limit(200);
         if (error) throw error;
         res.json({ success: true, calls: data });
     } catch (err) {
@@ -1192,13 +1199,15 @@ app.get('/api/calls', async (req, res) => {
     }
 });
 
-// CRM Contacts Endpoints
+// CRM Contacts - STRICTLY filtered by client_id
 app.get('/api/contacts', async (req, res) => {
     try {
         const { client_id } = req.query;
-        let query = supabase.from('contacts').select('*').order('created_at', { ascending: false });
-        if (client_id) query = query.eq('client_id', client_id);
-        const { data, error } = await query;
+        if (!client_id) return res.json({ success: true, contacts: [] });
+        const { data, error } = await supabase
+            .from('contacts').select('*')
+            .eq('client_id', client_id)
+            .order('created_at', { ascending: false });
         if (error) throw error;
         res.json({ success: true, contacts: data });
     } catch (err) {
@@ -2249,15 +2258,11 @@ app.post('/api/campaigns/gsheet-launch', async (req, res) => {
 app.get('/api/reports', async (req, res) => {
     try {
         const { client_id } = req.query;
-        let callsQuery = supabase.from('calls').select('*');
-        let leadsQuery = supabase.from('leads').select('id');
-        let appsQuery = supabase.from('appointments').select('*');
-        
-        if (client_id) {
-            callsQuery = callsQuery.eq('client_id', client_id);
-            leadsQuery = leadsQuery.eq('client_id', client_id);
-            appsQuery = appsQuery.eq('client_id', client_id);
-        }
+        // SECURITY: Never return all-client reports - require client_id
+        if (!client_id) return res.json({ success: true, metrics: null });
+        let callsQuery = supabase.from('calls').select('*').eq('client_id', client_id);
+        let leadsQuery = supabase.from('leads').select('id').eq('client_id', client_id);
+        let appsQuery = supabase.from('appointments').select('*').eq('client_id', client_id);
 
         const { data: calls } = await callsQuery;
         const { data: leads } = await leadsQuery;
