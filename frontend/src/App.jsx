@@ -381,17 +381,17 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
   };
 
   const navigation = [
-    { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
-    { id: 'calendar', label: 'Calendar', icon: Calendar },
-    { id: 'agent', label: 'Inbound Agent', icon: Bot },
-    { id: 'campaigns', label: 'Outbound Campaigns', icon: Megaphone },
-    { id: 'logs', label: 'Call Logs', icon: Phone },
-    { id: 'knowledge_base', label: 'Knowledge Base', icon: BookOpen },
-    { id: 'leads', label: 'Lead CRM', icon: Target },
-    { id: 'integrations_logs', label: 'Integrations', icon: Send },
-    { id: 'recordings', label: 'Voice Recordings', icon: Mic },
-    { id: 'reports', label: 'Reports', icon: TrendingUp },
-    { id: 'credentials', label: 'API Credentials', icon: Key },
+    { id: 'dashboard', label: 'Dashboard', svgPath: <><rect x="3" y="3" width="7" height="7" rx="1.5" fill="currentColor" opacity="0.9"/><rect x="14" y="3" width="7" height="7" rx="1.5" fill="currentColor" opacity="0.6"/><rect x="3" y="14" width="7" height="7" rx="1.5" fill="currentColor" opacity="0.6"/><rect x="14" y="14" width="7" height="7" rx="1.5" fill="currentColor" opacity="0.4"/></> },
+    { id: 'calendar', label: 'Calendar', svgPath: <><rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="1.5" fill="none"/><line x1="3" y1="10" x2="21" y2="10" stroke="currentColor" strokeWidth="1.5"/><line x1="8" y1="3" x2="8" y2="7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><line x1="16" y1="3" x2="16" y2="7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><circle cx="8" cy="15" r="1" fill="currentColor"/><circle cx="12" cy="15" r="1" fill="currentColor"/><circle cx="16" cy="15" r="1" fill="currentColor"/></> },
+    { id: 'agent', label: 'Inbound Agent', svgPath: <><circle cx="12" cy="8" r="3.5" stroke="currentColor" strokeWidth="1.5" fill="none"/><path d="M5 20c0-3.87 3.13-7 7-7s7 3.13 7 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" fill="none"/><circle cx="19" cy="8" r="1.5" fill="currentColor" opacity="0.6"/><line x1="19" y1="5" x2="19" y2="3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></> },
+    { id: 'campaigns', label: 'Outbound Campaigns', svgPath: <><path d="M22 2L11 13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/><path d="M22 2L15 22l-4-9-9-4 20-7z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/></> },
+    { id: 'logs', label: 'Call Logs', svgPath: <><path d="M5 4h4l2 5-2.5 1.5a11 11 0 005 5L15 13l5 2v4a2 2 0 01-2 2A16 16 0 013 5a2 2 0 012-1z" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/><circle cx="18" cy="6" r="2.5" fill="currentColor" opacity="0.6"/></> },
+    { id: 'knowledge_base', label: 'Knowledge Base', svgPath: <><rect x="4" y="3" width="12" height="16" rx="1.5" stroke="currentColor" strokeWidth="1.5" fill="none"/><line x1="7" y1="8" x2="13" y2="8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><line x1="7" y1="11" x2="13" y2="11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><line x1="7" y1="14" x2="10" y2="14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><path d="M16 6h2a2 2 0 012 2v11a2 2 0 01-2 2H8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" fill="none"/></> },
+    { id: 'leads', label: 'Lead CRM', svgPath: <><circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.5" fill="none"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><path d="M5.64 5.64l1.42 1.42M16.95 16.95l1.41 1.41M5.64 18.36l1.42-1.42M16.95 7.05l1.41-1.41" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></> },
+    { id: 'integrations_logs', label: 'Integrations', svgPath: <><circle cx="5" cy="12" r="2" stroke="currentColor" strokeWidth="1.5" fill="none"/><circle cx="19" cy="5" r="2" stroke="currentColor" strokeWidth="1.5" fill="none"/><circle cx="19" cy="19" r="2" stroke="currentColor" strokeWidth="1.5" fill="none"/><line x1="7" y1="11" x2="17" y2="6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><line x1="7" y1="13" x2="17" y2="18" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></> },
+    { id: 'recordings', label: 'Voice Recordings', svgPath: <><path d="M12 2a3 3 0 013 3v7a3 3 0 01-6 0V5a3 3 0 013-3z" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round"/><path d="M19 10v1a7 7 0 01-14 0v-1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" fill="none"/><line x1="12" y1="18" x2="12" y2="22" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><line x1="8" y1="22" x2="16" y2="22" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></> },
+    { id: 'reports', label: 'Reports', svgPath: <><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/></> },
+    { id: 'credentials', label: 'API Credentials', svgPath: <><rect x="3" y="11" width="18" height="11" rx="2" stroke="currentColor" strokeWidth="1.5" fill="none"/><path d="M7 11V7a5 5 0 0110 0v4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" fill="none"/><circle cx="12" cy="16" r="1.5" fill="currentColor"/></> },
   ];
 
   const { firstDay, daysInMonth } = getDaysInMonth(calendarDate);
@@ -494,41 +494,55 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
         </div>
       )}
 
-      {/* Sidebar — Premium */}
-      <aside className="w-[260px] min-w-[260px] bg-sidebar border-r border-border flex flex-col relative z-10">
+      {/* Sidebar — Futuristic */}
+      <aside className="w-[255px] min-w-[255px] bg-sidebar border-r border-border/60 flex flex-col relative z-10">
         {/* Brand Header */}
-        <div className="flex items-center justify-between px-6 py-5 border-b border-border">
+        <div className="flex items-center justify-between px-5 py-5 border-b border-border/50">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-gradient-to-br from-primary to-purple-600 rounded-xl flex items-center justify-center text-white shadow-glow">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z" />
-                <path d="M8 12c0-2.21 1.79-4 4-4s4 1.79 4 4" />
-                <circle cx="12" cy="15" r="2" fill="currentColor" />
-              </svg>
+            {/* Futuristic Logo Mark */}
+            <div className="relative w-9 h-9 flex-shrink-0">
+              <div className="absolute inset-0 bg-gradient-to-br from-violet-600 to-indigo-600 rounded-xl opacity-90 shadow-glow" />
+              <div className="relative w-full h-full flex items-center justify-center">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                  <polygon points="12,3 21,8 21,16 12,21 3,16 3,8" stroke="rgba(255,255,255,0.9)" strokeWidth="1.5" fill="none" strokeLinejoin="round"/>
+                  <polygon points="12,7 17,10 17,14 12,17 7,14 7,10" fill="rgba(255,255,255,0.25)" stroke="rgba(255,255,255,0.6)" strokeWidth="1" strokeLinejoin="round"/>
+                  <circle cx="12" cy="12" r="2" fill="white"/>
+                </svg>
+              </div>
             </div>
             <div>
-              <h1 className="font-extrabold text-[15px] leading-tight tracking-tight">{user?.whitelabel || 'Azlon AI'}</h1>
-              <p className="text-2xs text-muted-foreground font-medium tracking-wide">Voice Intelligence</p>
+              <h1 className="font-bold text-[14.5px] leading-tight tracking-tight">{user?.whitelabel || 'Azlon AI'}</h1>
+              <p className="text-[10px] text-muted-foreground font-normal tracking-[0.08em] mt-0.5">Voice Intelligence</p>
               {(user?.client_code || user?.clientCode) && (
-                <p className="text-[9px] font-mono text-muted-foreground/60 mt-0.5 tracking-widest">{user.clientCode}</p>
+                <p className="text-[9px] font-mono text-muted-foreground/50 mt-0.5 tracking-widest">{user.clientCode}</p>
               )}
             </div>
           </div>
           <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="text-muted-foreground hover:text-foreground p-2 hover:bg-white/5 rounded-lg transition-all">
-             {theme === 'dark' ? <Sun size={16} strokeWidth={2} /> : <Moon size={16} strokeWidth={2} />}
+             {theme === 'dark' ? <Sun size={15} strokeWidth={1.5} /> : <Moon size={15} strokeWidth={1.5} />}
           </button>
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 overflow-y-auto py-3 px-3">
+        <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-0.5">
           {navigation.map((item, idx) => {
-            if (item.section) return <div key={idx} className="px-3 py-2.5 mt-3 first:mt-0 text-2xs font-bold text-muted-foreground/60 uppercase tracking-ultra">{item.section}</div>;
-            const Icon = item.icon;
+            const isActive = activePage === item.id;
             return (
               <button key={item.id} onClick={() => setActivePage(item.id)}
-                className={cn("nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition-all outline-none mb-0.5",
-                  activePage === item.id ? "active text-primary font-semibold" : "text-muted-foreground hover:text-foreground")}>
-                <Icon size={17} strokeWidth={activePage === item.id ? 2.5 : 1.8} className="transition-all" />{item.label}
+                className={cn(
+                  "group w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[12.5px] font-medium transition-all duration-200 outline-none relative overflow-hidden",
+                  isActive
+                    ? "bg-primary/10 text-primary font-semibold"
+                    : "text-muted-foreground hover:text-foreground hover:bg-white/[0.04]"
+                )}>
+                {isActive && (
+                  <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-primary rounded-full" />
+                )}
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                  className={cn("flex-shrink-0 transition-all duration-200", isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground")}>
+                  {item.svgPath}
+                </svg>
+                <span className="tracking-tight">{item.label}</span>
               </button>
             );
           })}
@@ -1312,7 +1326,7 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest pl-1 border-l border-border ml-1">Recording</span>
                                  </div>
                                  <audio controls className="w-full h-8 outline-none grayscale opacity-90 hover:opacity-100 hover:grayscale-0 transition-all">
-                                   <source src={c.recording_url} type="audio/mpeg" />
+                                   <source src={c.recording_url && c.recording_url.includes('api.twilio.com') ? `${API_BASE}/api/recordings/${c.twilio_sid}` : c.recording_url} type="audio/mpeg" />
                                  </audio>
                                </div>
                             </td>
@@ -1987,7 +2001,7 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                   </h4>
                   <div className="bg-background/50 p-4 rounded-xl border border-border flex items-center gap-4">
                      <audio controls className="flex-1 h-10">
-                        <source src={viewSummaryModal.recording_url} type="audio/mpeg" />
+                        <source src={viewSummaryModal.recording_url && viewSummaryModal.recording_url.includes('api.twilio.com') ? `${API_BASE}/api/recordings/${viewSummaryModal.twilio_sid}` : viewSummaryModal.recording_url} type="audio/mpeg" />
                      </audio>
                   </div>
                   <p className="text-[10px] text-muted-foreground mt-2 italic">Stored securely in {getIntegration('aws_s3').meta_data?.bucket || 'your S3 bucket'}.</p>
