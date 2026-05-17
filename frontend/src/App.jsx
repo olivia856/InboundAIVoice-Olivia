@@ -1600,7 +1600,10 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                     <option value="5f8e97b1-cd48-431a-b6a1-3b94306d8914">🇬🇧 David (Male, British)</option>
                     <option value="d20e12df-6fd9-428e-a81f-ba0090de13d9">🇬🇧 Emily (Female, British)</option>
                     <option value="bf3ee560-7c86-4d46-9f23-81b12dd6ba5f">🇺🇸 Ryan (Male, Energetic)</option>
-                    <option value="8ff05d3d-d78d-40a6-88c1-dd1efcf571f0">🇺🇸 Emma (Female, Energetic)</option>
+                  </optgroup>
+                  <optgroup label="Australian Voices">
+                    <option value="280a8e4d-2974-4593-87eb-fb74f0278a2e">🇦🇺 Arlo (Male, Australian)</option>
+                    <option value="8ff05d3d-d78d-40a6-88c1-dd1efcf571f0">🇦🇺 Hannah (Female, Australian)</option>
                   </optgroup>
                   <optgroup label="Custom Integration">
                     <option value="elevenlabs:custom">🎙️ My Custom ElevenLabs Voice</option>
