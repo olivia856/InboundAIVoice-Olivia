@@ -641,9 +641,12 @@ app.post('/api/twilio/inbound', async (req, res) => {
             selectedTools.push({
                 temporaryTool: {
                     modelToolName: "hang_up",
-                    description: "Explicitly terminate the phone call to end the session. Call this as your VERY LAST action when the user says goodbye or is definitely leaving.",
+                    description: "Hang up and terminate the phone call immediately. You MUST call this tool the instant the caller says 'bye', 'goodbye', 'thank you bye', 'see you', 'ok bye', or any farewell. No further speech after calling this tool.",
                     dynamicParameters: [
                         { name: "phone", location: "PARAMETER_LOCATION_BODY", schema: { type: "string", description: "The caller's phone number" }, required: true }
+                    ],
+                    staticParameters: [
+                        { name: "client_id", location: "PARAMETER_LOCATION_BODY", value: clientId }
                     ],
                     http: { httpMethod: "POST", baseUrlPattern: `${baseUrl}/api/tools/hang_up` }
                 }
@@ -1052,9 +1055,12 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
             selectedTools.push({
                 temporaryTool: {
                     modelToolName: "hang_up",
-                    description: "Explicitly terminate the phone call to end the session. Call this as your VERY LAST action when the user says goodbye or is definitely leaving.",
+                    description: "Hang up and terminate the phone call immediately. You MUST call this tool the instant the lead says 'bye', 'goodbye', 'thank you bye', 'see you', 'ok bye', or any farewell. No further speech after calling this tool.",
                     dynamicParameters: [
                         { name: "phone", location: "PARAMETER_LOCATION_BODY", schema: { type: "string", description: "The lead's phone number" }, required: true }
+                    ],
+                    staticParameters: [
+                        { name: "client_id", location: "PARAMETER_LOCATION_BODY", value: client_id }
                     ],
                     http: { httpMethod: "POST", baseUrlPattern: `${baseUrl}/api/tools/hang_up` }
                 }
@@ -1357,6 +1363,21 @@ app.post('/api/agent', async (req, res) => {
     } catch (err) {
         res.status(500).json({ error: "Could not save agent settings." });
     }
+});
+
+// --- DEDICATED: Save campaign goal only (safe - won't overwrite other settings) ---
+app.patch('/api/agent/campaign-goal', async (req, res) => {
+    try {
+        const { client_id, campaign_goal } = req.body;
+        if (!client_id) return res.status(400).json({ error: 'client_id required' });
+        const { data: existing } = await supabase.from('agent_settings').select('id').eq('client_id', client_id).limit(1).maybeSingle();
+        if (existing?.id) {
+            await supabase.from('agent_settings').update({ campaign_goal }).eq('id', existing.id);
+        } else {
+            await supabase.from('agent_settings').insert([{ client_id, campaign_goal }]);
+        }
+        res.json({ success: true });
+    } catch(err) { res.status(500).json({ error: 'Failed to save campaign goal' }); }
 });
 
 // Twilio Call Status Webhook (Hangs up, fetches Summary from Ultravox!)
@@ -1792,18 +1813,29 @@ app.post('/api/tools/log_outcome', async (req, res) => {
 });
 
 app.post('/api/tools/hang_up', async (req, res) => {
+    // Respond to Ultravox FIRST so the AI stops talking immediately
+    res.json({ result: "Goodbye! Ending the call now." });
     try {
         const { phone, client_id } = req.body;
-        const cleanPhone = String(phone).replace(/\D/g, '');
-        const { data: calls } = await supabase.from('calls').select('twilio_sid').eq('client_id', client_id).or(`from_phone.ilike.%${cleanPhone}%,to_phone.ilike.%${cleanPhone}%`).order('created_at', { ascending: false }).limit(1);
-
-        if (calls && calls.length > 0 && calls[0].twilio_sid) {
-            const { data: twInt } = await supabase.from('integrations').select('*').eq('provider', 'twilio').eq('client_id', client_id).single();
-            const client = require('twilio')(twInt?.meta_data?.sid, twInt?.api_key);
-            await client.calls(calls[0].twilio_sid).update({ status: 'completed' });
+        console.log(`[HANG_UP] Triggered for client_id=${client_id}, phone=${phone}`);
+        if (!client_id) { console.warn('[HANG_UP] No client_id passed - cannot terminate'); return; }
+        const cleanPhone = String(phone || '').replace(/\D/g, '');
+        // Find the most recent active call for this client
+        let query = supabase.from('calls').select('twilio_sid').eq('client_id', client_id).order('created_at', { ascending: false }).limit(1);
+        if (cleanPhone.length > 5) {
+            query = supabase.from('calls').select('twilio_sid').eq('client_id', client_id).or(`from_phone.ilike.%${cleanPhone}%,to_phone.ilike.%${cleanPhone}%`).order('created_at', { ascending: false }).limit(1);
         }
-        res.json({ result: "Call terminated." });
-    } catch(err) { res.status(500).json({ result: "Failed to hang up" }); }
+        const { data: calls } = await query;
+        console.log(`[HANG_UP] Found calls:`, calls?.length, calls?.[0]?.twilio_sid);
+        if (calls && calls.length > 0 && calls[0].twilio_sid) {
+            const { data: twInt } = await supabase.from('integrations').select('*').eq('provider', 'twilio').eq('client_id', client_id).maybeSingle();
+            if (twInt?.meta_data?.sid && twInt?.api_key) {
+                const twilioClient = require('twilio')(twInt.meta_data.sid, twInt.api_key);
+                await twilioClient.calls(calls[0].twilio_sid).update({ status: 'completed' });
+                console.log(`[HANG_UP] Successfully terminated call ${calls[0].twilio_sid}`);
+            } else { console.warn('[HANG_UP] No Twilio credentials found for client'); }
+        } else { console.warn('[HANG_UP] No matching call SID found in DB'); }
+    } catch(err) { console.error('[HANG_UP] Error:', err.message); }
 });
 
 app.post('/api/tools/transfer', async (req, res) => {
@@ -1829,12 +1861,12 @@ app.get('/api/admin/stats', async (req, res) => {
         const totalMins = clients.reduce((acc, c) => acc + (c.mins_used || 0), 0);
 
         // Real-time call counts from calls table
-        const { data: callsData } = await supabase.from('calls').select('client_id, duration');
+        const { data: callsData } = await supabase.from('calls').select('client_id, duration_seconds');
         const callsByClient = {};
         const minsByClient = {};
         (callsData || []).forEach(call => {
             callsByClient[call.client_id] = (callsByClient[call.client_id] || 0) + 1;
-            minsByClient[call.client_id] = (minsByClient[call.client_id] || 0) + Math.round((call.duration || 0) / 60);
+            minsByClient[call.client_id] = (minsByClient[call.client_id] || 0) + Math.round((call.duration_seconds || 0) / 60);
         });
 
         const { count: totalActiveAgents } = await supabase.from('agent_settings').select('*', { count: 'exact', head: true });

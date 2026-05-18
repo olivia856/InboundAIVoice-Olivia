@@ -241,9 +241,9 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
   const [corpusUrl, setCorpusUrl] = useState('');
   const [corpusFile, setCorpusFile] = useState(null);
   const [agentTools, setAgentTools] = useState({ hangUp: true, transferCall: false, queryCorpus: false });
-  // Custom confirm modal (replaces window.confirm)
   const [confirmModal, setConfirmModal] = useState(null); // { message, onConfirm }
   const showConfirm = (message, onConfirm) => setConfirmModal({ message, onConfirm });
+  const [calendarError, setCalendarError] = useState(''); // inline error inside booking modal
 
   const saveManualLead = async (e) => {
     e.preventDefault();
@@ -628,7 +628,7 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
               const now = new Date();
               const monthName = now.toLocaleString('default', { month: 'long', year: 'numeric' });
               const thisMonthCalls = callLogs.filter(c => { const d = new Date(c.created_at); return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear(); });
-              const minsUsed = Math.round(thisMonthCalls.reduce((acc, c) => acc + (c.duration || 0), 0) / 60);
+              const minsUsed = Math.round(thisMonthCalls.reduce((acc, c) => acc + (c.duration_seconds || c.duration || 0), 0) / 60);
               const minsRemaining = limit !== null ? Math.max(0, limit - minsUsed) : null;
               const pct = limit ? Math.min(100, Math.round((minsUsed / limit) * 100)) : 0;
               const barColor = pct > 85 ? 'bg-red-500' : pct > 60 ? 'bg-amber-500' : 'bg-primary';
@@ -1654,7 +1654,8 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                   onBlur={async (e) => {
                     const clientId = user?.client_code || user?.clientCode;
                     if (!clientId) return;
-                    await fetch(`${API_BASE}/api/agent`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ client_id: clientId, campaign_goal: e.target.value }) });
+                    // Use dedicated PATCH endpoint - only updates campaign_goal, never overwrites other settings
+                    await fetch(`${API_BASE}/api/agent/campaign-goal`, { method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ client_id: clientId, campaign_goal: e.target.value }) });
                     showToast('Campaign goal saved!', 'success');
                   }}
                   placeholder="What is the objective of this outbound call? e.g. 'Get them to book a viewing for next week.'" 
@@ -2069,7 +2070,7 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                  <h3 className="font-bold text-lg">{calendarModal.mode === 'reschedule' ? 'Reschedule Appointment' : calendarModal.mode === 'followup' ? '📅 Book Follow-Up' : 'Manual Booking'}</h3>
                  <p className="text-xs text-muted-foreground font-mono mt-1">Date: {calendarModal.date.toLocaleDateString()}</p>
               </div>
-              <button onClick={() => setCalendarModal(null)} className="text-muted-foreground hover:text-white bg-white/5 p-2 rounded-lg transition-colors"><XCircle size={20}/></button>
+              <button onClick={() => { setCalendarModal(null); setCalendarError(''); }} className="text-muted-foreground hover:text-white bg-white/5 p-2 rounded-lg transition-colors"><XCircle size={20}/></button>
             </div>
             <form onSubmit={async (e) => {
               e.preventDefault();
@@ -2087,14 +2088,15 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                 const conflict = appointments.find(appt => {
                   if (appt.status === 'completed') return false;
                   const apptDt = new Date(appt.start_time);
-                  return Math.abs(apptDt - slotDt) < 30 * 60 * 1000; // within 30 min
+                  return Math.abs(apptDt - slotDt) < 30 * 60 * 1000;
                 });
                 if (conflict) {
-                  showToast(`⚠️ That slot is already booked for ${conflict.name}. Please choose a different time.`, 'error');
+                  setCalendarError(`⚠️ That slot is already booked for ${conflict.name}. Please choose a different time.`);
                   btn.innerText = prevText;
                   return;
                 }
               }
+              setCalendarError('');
               try {
                 let res;
                 if (calendarModal.mode === 'reschedule') {
@@ -2117,6 +2119,13 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                 fetchAll();
               } catch(err) { showToast(err.message || 'Failed. Check details.','error'); btn.innerText = prevText; }
             }} className="p-6 space-y-4">
+               {/* Inline conflict error — shows INSIDE modal, never blurred */}
+               {calendarError && (
+                 <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-medium rounded-xl px-4 py-3">
+                   <span className="mt-0.5 shrink-0">⚠️</span>
+                   <span>{calendarError.replace('⚠️', '').trim()}</span>
+                 </div>
+               )}
                <div className="grid grid-cols-2 gap-3">
                  <div>
                     <label className="block text-[10px] font-bold text-muted-foreground uppercase mb-1">Date</label>

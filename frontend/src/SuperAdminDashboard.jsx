@@ -232,6 +232,7 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
         email: updatedClient.email,
         password: updatedClient.password,
         whitelabel: updatedClient.whitelabel,
+        plan: updatedClient.plan,
         agent_enabled: updatedClient.agent_enabled !== undefined ? updatedClient.agent_enabled : updatedClient.agentEnabled
       };
       
@@ -424,7 +425,7 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
                         Settings
                       </button>
                       <button 
-                        onClick={() => onViewClient({ id: client.id, name: client.name, whitelabel: client.whitelabel, agentEnabled: client.agent_enabled, clientCode: client.client_code })}
+                        onClick={() => onViewClient({ id: client.id, name: client.name, whitelabel: client.whitelabel, agentEnabled: client.agent_enabled, clientCode: client.client_code, plan: client.plan || 'Starter' })}
                         className="py-1.5 border border-[#e4e9f2] bg-[#f0f3f9] hover:bg-[#e4e9f2] rounded-lg text-xs font-semibold text-blue-600 transition-all flex items-center justify-center gap-1"
                       >
                         <Eye size={12} /> Login as
