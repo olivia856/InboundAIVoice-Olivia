@@ -52,6 +52,20 @@ if (!BACKEND_URL) {
 let finalDbUrl = 'https://qhqmljwexivhvxzfklum.supabase.co';
 let finalDbKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFocW1sandleGl2aHZ4emZrbHVtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ3OTM3MjMsImV4cCI6MjA5MDM2OTcyM30.nO_aKJkRRsDNSIWDLgmvos7LxISvenFz2Fwn-62BgLo';
 const supabase = createClient(finalDbUrl, finalDbKey);
+
+// --- AUTO-MIGRATE: Add campaign_goal column if not exists ---
+(async () => {
+    try {
+        // Try to select the column — if it fails, the column doesn't exist yet
+        const { error } = await supabase.from('agent_settings').select('campaign_goal').limit(1);
+        if (error && error.message && error.message.includes('campaign_goal')) {
+            // Column doesn't exist — use raw SQL via RPC if available
+            console.log('[Migration] campaign_goal column missing, attempting to add...');
+            await supabase.rpc('exec_sql', { sql: 'ALTER TABLE agent_settings ADD COLUMN IF NOT EXISTS campaign_goal TEXT;' }).catch(() => {});
+        }
+        console.log('[Migration] agent_settings.campaign_goal column: OK');
+    } catch(e) { /* migration non-fatal */ }
+})();
 // --- AWS S3 NOTIFICATION ENGINE ---
 async function getS3Client() {
     // Check platform settings first, then client integrations, then env vars
@@ -1319,7 +1333,7 @@ app.post('/api/agent', async (req, res) => {
             client_id, system_prompt, voice_preset, temperature, 
             personality, greeting_message,
             working_days, open_time, close_time, non_working_dates,
-            tools_config
+            tools_config, campaign_goal
         } = req.body;
         
         const updateData = {
@@ -1329,6 +1343,7 @@ app.post('/api/agent', async (req, res) => {
         };
         
         if (req.body.record_calls !== undefined) updateData.record_calls = req.body.record_calls;
+        if (campaign_goal !== undefined) updateData.campaign_goal = campaign_goal;
         
         const { data: existing } = await supabase.from('agent_settings').select('id').eq('client_id', client_id).limit(1).maybeSingle();
         
@@ -1809,20 +1824,41 @@ app.post('/api/tools/transfer', async (req, res) => {
 // --- SUPER ADMIN PLATFORM STATS ---
 app.get('/api/admin/stats', async (req, res) => {
     try {
-        const { data: clients } = await supabase.from('clients').select('calls_count, mins_used');
+        const { data: clients } = await supabase.from('clients').select('id, name, client_code, plan, calls_count, mins_used, status, agent_enabled');
         const totalCalls = clients.reduce((acc, c) => acc + (c.calls_count || 0), 0);
         const totalMins = clients.reduce((acc, c) => acc + (c.mins_used || 0), 0);
-        
+
+        // Real-time call counts from calls table
+        const { data: callsData } = await supabase.from('calls').select('client_id, duration');
+        const callsByClient = {};
+        const minsByClient = {};
+        (callsData || []).forEach(call => {
+            callsByClient[call.client_id] = (callsByClient[call.client_id] || 0) + 1;
+            minsByClient[call.client_id] = (minsByClient[call.client_id] || 0) + Math.round((call.duration || 0) / 60);
+        });
+
         const { count: totalActiveAgents } = await supabase.from('agent_settings').select('*', { count: 'exact', head: true });
         
+        const clientBreakdown = (clients || []).map(c => ({
+            id: c.id,
+            name: c.name,
+            client_code: c.client_code,
+            plan: c.plan || 'Starter',
+            total_calls: callsByClient[c.client_code] || c.calls_count || 0,
+            mins_used: minsByClient[c.client_code] || c.mins_used || 0,
+            status: c.status,
+            agent_enabled: c.agent_enabled
+        }));
+
         res.json({
             success: true,
             stats: {
-                totalCalls,
+                totalCalls: callsData?.length || totalCalls,
                 totalMins,
                 activeClients: clients.length,
                 activeAgents: totalActiveAgents || 0
-            }
+            },
+            clientBreakdown
         });
     } catch (err) {
         res.status(500).json({ error: "Failed to fetch platform stats" });

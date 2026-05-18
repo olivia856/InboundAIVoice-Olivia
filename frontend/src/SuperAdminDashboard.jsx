@@ -93,7 +93,7 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
       const res = await fetch(`${API_BASE}/api/admin/stats`);
       const data = await res.json();
       if (data.success) {
-        setPlatformStats(data.stats);
+        setPlatformStats({ ...data.stats, clientBreakdown: data.clientBreakdown || [] });
       }
     } catch (err) {
       console.error("Failed to fetch platform stats");
@@ -631,24 +631,47 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
                   <thead>
                     <tr className="bg-white border-b border-[#e4e9f2]">
                       <th className="py-3 px-5 text-[#94a3b8] font-bold uppercase tracking-wider">Client Name</th>
+                      <th className="py-3 px-5 text-[#94a3b8] font-bold uppercase tracking-wider">Plan</th>
                       <th className="py-3 px-5 text-[#94a3b8] font-bold uppercase tracking-wider">Total Calls</th>
                       <th className="py-3 px-5 text-[#94a3b8] font-bold uppercase tracking-wider">Minutes Used</th>
                       <th className="py-3 px-5 text-[#94a3b8] font-bold uppercase tracking-wider">Status</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {clients.map(c => (
-                      <tr key={c.id} className="border-b border-[#e4e9f2] hover:bg-[#f8fafc]">
-                        <td className="py-3 px-5 font-bold">{c.name}</td>
-                        <td className="py-3 px-5 font-medium text-blue-600">{c.calls_count || 0}</td>
-                        <td className="py-3 px-5 font-medium">{c.mins_used || 0} mins</td>
-                        <td className="py-3 px-5">
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${c.status === 'Active' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
-                            {c.status}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
+                    {(platformStats.clientBreakdown || clients).map(c => {
+                      const planLimits = { Starter: 500, Pro: 2000, Business: 5000, Enterprise: null };
+                      const planKey = (c.plan || 'Starter').split(' ')[0];
+                      const limit = planLimits[planKey] ?? null;
+                      const minsUsed = c.mins_used || 0;
+                      const pct = limit ? Math.min(100, Math.round((minsUsed / limit) * 100)) : 0;
+                      return (
+                        <tr key={c.id} className="border-b border-[#e4e9f2] hover:bg-[#f8fafc]">
+                          <td className="py-3 px-5 font-bold">{c.name}</td>
+                          <td className="py-3 px-5">
+                            <div className="flex flex-col gap-0.5">
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-600 w-fit">
+                                {planKey}{limit ? ` · ${limit} mins` : ' · Unlimited'}
+                              </span>
+                              {limit && (
+                                <div className="w-24 bg-gray-100 rounded-full h-1 mt-1">
+                                  <div className={`h-1 rounded-full ${pct > 85 ? 'bg-red-500' : pct > 60 ? 'bg-amber-500' : 'bg-blue-500'}`} style={{ width: `${pct}%` }} />
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-3 px-5 font-medium text-blue-600">{c.total_calls || c.calls_count || 0}</td>
+                          <td className="py-3 px-5 font-medium">
+                            {minsUsed} mins
+                            {limit && <span className="text-[#94a3b8] ml-1">/ {limit}</span>}
+                          </td>
+                          <td className="py-3 px-5">
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${c.status === 'Active' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
+                              {c.status || 'Active'}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

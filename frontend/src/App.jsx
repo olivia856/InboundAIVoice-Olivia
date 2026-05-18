@@ -241,6 +241,9 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
   const [corpusUrl, setCorpusUrl] = useState('');
   const [corpusFile, setCorpusFile] = useState(null);
   const [agentTools, setAgentTools] = useState({ hangUp: true, transferCall: false, queryCorpus: false });
+  // Custom confirm modal (replaces window.confirm)
+  const [confirmModal, setConfirmModal] = useState(null); // { message, onConfirm }
+  const showConfirm = (message, onConfirm) => setConfirmModal({ message, onConfirm });
 
   const saveManualLead = async (e) => {
     e.preventDefault();
@@ -280,7 +283,7 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
     fetch(`${API_BASE}/api/leads${query}`).then(r => r.json()).then(d => { if (d?.success) setLeads(d.leads); }).catch(() => {});
     fetch(`${API_BASE}/api/knowledge_base${query}`).then(r => r.json()).then(d => { if (d?.success) setKnowledgeBase(d.docs); }).catch(() => {});
     fetch(`${API_BASE}/api/campaigns${query}`).then(r => r.json()).then(d => { if (d?.success) setCampaigns(d.campaigns); }).catch(() => {});
-    fetch(`${API_BASE}/api/agent${query}`).then(r => r.json()).then(d => { if (d.success && d.agent) setAgentSettings(d.agent); }).catch(() => {});
+    fetch(`${API_BASE}/api/agent${query}`).then(r => r.json()).then(d => { if (d.success && d.agent) { setAgentSettings(d.agent); if (d.agent.campaign_goal) setCampaignGoal(d.agent.campaign_goal); } }).catch(() => {});
     fetch(`${API_BASE}/api/integrations${query}`).then(r => r.json()).then(d => { if (d.success) setIntegrations(d.integrations || []); }).catch(() => {});
     fetch(`${API_BASE}/api/appointments${query}`).then(r => r.json()).then(d => { if (d.success) setAppointments(d.appointments || []); }).catch(() => {});
     fetch(`${API_BASE}/api/reports${query}`).then(r => r.json()).then(d => { if (d.success) setReports(d.metrics); }).catch(() => {});
@@ -617,6 +620,40 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                 </div>
               ))}
             </div>
+            {/* ── Minutes Usage Widget ── */}
+            {(() => {
+              const planLimits = { Starter: 500, Pro: 2000, Business: 5000, Enterprise: null };
+              const planKey = (user?.plan || 'Starter').split(' ')[0];
+              const limit = planLimits[planKey] ?? null;
+              const now = new Date();
+              const monthName = now.toLocaleString('default', { month: 'long', year: 'numeric' });
+              const thisMonthCalls = callLogs.filter(c => { const d = new Date(c.created_at); return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear(); });
+              const minsUsed = Math.round(thisMonthCalls.reduce((acc, c) => acc + (c.duration || 0), 0) / 60);
+              const minsRemaining = limit !== null ? Math.max(0, limit - minsUsed) : null;
+              const pct = limit ? Math.min(100, Math.round((minsUsed / limit) * 100)) : 0;
+              const barColor = pct > 85 ? 'bg-red-500' : pct > 60 ? 'bg-amber-500' : 'bg-primary';
+              return (
+                <div className="bg-card border border-border rounded-2xl p-5 flex items-center gap-6">
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-bold text-muted-foreground uppercase tracking-ultra">Total Minutes — {monthName}</span>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary">{planKey} Plan{limit ? ` · ${limit} mins` : ' · Unlimited'}</span>
+                    </div>
+                    <div className="w-full bg-muted rounded-full h-2 mt-3 mb-2">
+                      <div className={`${barColor} h-2 rounded-full transition-all`} style={{ width: limit ? `${pct}%` : '100%' }} />
+                    </div>
+                    <div className="flex justify-between text-xs text-muted-foreground font-medium">
+                      <span><span className="text-foreground font-bold">{minsUsed}</span> mins used</span>
+                      <span>{limit !== null ? <><span className="text-foreground font-bold">{minsRemaining}</span> mins remaining</> : <span className="text-emerald-400 font-bold">Unlimited</span>}</span>
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <div className="text-3xl font-black text-primary tracking-tight">{thisMonthCalls.length}</div>
+                    <div className="text-xs text-muted-foreground font-medium mt-1">calls this month</div>
+                  </div>
+                </div>
+              );
+            })()}
             <div className="grid grid-cols-3 gap-5">
               {/* Win Chart: Call Outcomes */}
               <div className="bg-card border border-border rounded-2xl p-6 shadow-premium flex flex-col h-[350px]">
@@ -916,31 +953,31 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                                       setEditingAppt(null);
                                       setCalendarModal({ date: new Date(a.start_time), mode: 'reschedule', rescheduleId: a.id, prefill: a });
                                    }} className="w-full text-left px-4 py-2 text-xs hover:bg-white/5 transition">Allocate new time</button>
-                                   <button onClick={async () => {
-                                      setEditingAppt(null);
-                                      if(window.confirm('Mark this meeting as completed?')) {
-                                        await fetch(`${API_BASE}/api/appointments/manual/${a.id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ action: 'complete', status: 'completed' })});
-                                        showToast('Meeting marked as completed!', 'success');
-                                        fetchAll();
-                                      }
-                                   }} className="w-full text-left px-4 py-2 text-xs hover:bg-blue-500/10 text-blue-400 transition">✓ Meeting Over</button>
-                                   <button onClick={async () => {
-                                      setEditingAppt(null);
-                                      if(window.confirm("Mark as completed and book follow-up?")) {
-                                        await fetch(`${API_BASE}/api/appointments/manual/${a.id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ action: 'complete'})});
-                                        showToast('Marked complete!', 'success');
-                                        fetchAll();
-                                        setCalendarModal({ date: new Date(), prefill: a });
-                                      }
-                                   }} className="w-full text-left px-4 py-2 text-xs hover:bg-emerald-500/10 text-emerald-400 transition">Follow-up appointment</button>
-                                   <button onClick={async () => {
-                                      setEditingAppt(null);
-                                      if(window.confirm("Are you sure you want to cancel this appointment?")) {
-                                         await fetch(`${API_BASE}/api/appointments/manual/${a.id}`, { method: 'DELETE' });
-                                         showToast('Appointment deleted', 'success');
+                                   <button onClick={() => {
+                                       setEditingAppt(null);
+                                       showConfirm('Mark this meeting as completed? It will be removed from the calendar.', async () => {
+                                         await fetch(`${API_BASE}/api/appointments/manual/${a.id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ status: 'completed' })});
+                                         showToast('Meeting marked as completed!', 'success');
                                          fetchAll();
-                                      }
-                                   }} className="w-full text-left px-4 py-2 text-xs hover:bg-red-500/10 text-red-500 transition">Delete appointment</button>
+                                       });
+                                    }} className="w-full text-left px-4 py-2 text-xs hover:bg-blue-500/10 text-blue-400 transition">✓ Meeting Over</button>
+                                    <button onClick={() => {
+                                       setEditingAppt(null);
+                                       showConfirm('Mark current meeting as done and book a follow-up appointment?', async () => {
+                                         await fetch(`${API_BASE}/api/appointments/manual/${a.id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ status: 'completed' })});
+                                         showToast('Marked complete! Now select a new time for the follow-up.', 'success');
+                                         fetchAll();
+                                         setCalendarModal({ date: new Date(), mode: 'followup', prefill: a });
+                                       });
+                                    }} className="w-full text-left px-4 py-2 text-xs hover:bg-emerald-500/10 text-emerald-400 transition">📅 Follow-up appointment</button>
+                                    <button onClick={() => {
+                                       setEditingAppt(null);
+                                       showConfirm('Are you sure you want to permanently delete this appointment?', async () => {
+                                          await fetch(`${API_BASE}/api/appointments/manual/${a.id}`, { method: 'DELETE' });
+                                          showToast('Appointment deleted', 'success');
+                                          fetchAll();
+                                       });
+                                    }} className="w-full text-left px-4 py-2 text-xs hover:bg-red-500/10 text-red-500 transition">🗑 Delete appointment</button>
                                 </div>
                              )}
                            </div>
@@ -1612,10 +1649,16 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
               </div>
               
               <div>
-                <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">Primary Campaign Goal</label>
+                <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">Primary Campaign Goal <span className="text-muted-foreground/50 normal-case font-normal">(auto-saved)</span></label>
                 <textarea id="campaign_goal" value={campaignGoal} onChange={e => setCampaignGoal(e.target.value)}
+                  onBlur={async (e) => {
+                    const clientId = user?.client_code || user?.clientCode;
+                    if (!clientId) return;
+                    await fetch(`${API_BASE}/api/agent`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ client_id: clientId, campaign_goal: e.target.value }) });
+                    showToast('Campaign goal saved!', 'success');
+                  }}
                   placeholder="What is the objective of this outbound call? e.g. 'Get them to book a viewing for next week.'" 
-                  className="w-full bg-background border border-border p-3 rounded-lg text-sm outline-none h-20 resize-none"></textarea>
+                  className="w-full bg-background border border-border p-3 rounded-lg text-sm outline-none h-20 resize-none focus:border-primary transition-colors"></textarea>
               </div>
 
               <div className="grid grid-cols-2 gap-4 pt-2">
@@ -2023,7 +2066,7 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
           <div className="bg-card w-full max-w-md rounded-2xl shadow-premium-lg border border-border flex flex-col">
             <div className="p-6 border-b border-border flex justify-between items-center bg-sidebar/50 rounded-t-2xl">
               <div>
-                 <h3 className="font-bold text-lg">{calendarModal.mode === 'reschedule' ? 'Reschedule' : 'Manual Booking'}</h3>
+                 <h3 className="font-bold text-lg">{calendarModal.mode === 'reschedule' ? 'Reschedule Appointment' : calendarModal.mode === 'followup' ? '📅 Book Follow-Up' : 'Manual Booking'}</h3>
                  <p className="text-xs text-muted-foreground font-mono mt-1">Date: {calendarModal.date.toLocaleDateString()}</p>
               </div>
               <button onClick={() => setCalendarModal(null)} className="text-muted-foreground hover:text-white bg-white/5 p-2 rounded-lg transition-colors"><XCircle size={20}/></button>
@@ -2033,29 +2076,46 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
               const btn = e.target.querySelector('button[type=submit]');
               const prevText = btn.innerText;
               btn.innerText = 'Saving...';
-              const dateStr = e.target.date.value; // YYYY-MM-DD
-              const timeStr = e.target.time.value; // HH:mm
-              const start_time = `${dateStr}T${timeStr}:00+05:30`;
+              const dateStr = e.target.date.value;
+              const timeStr = e.target.time.value;
+              const start_time = `${dateStr}T${timeStr}:00`;
+              // Conflict detection for follow-up and new bookings
+              const isFollowup = calendarModal.mode === 'followup';
+              const isNew = !calendarModal.mode || isFollowup;
+              if (isNew) {
+                const slotDt = new Date(start_time);
+                const conflict = appointments.find(appt => {
+                  if (appt.status === 'completed') return false;
+                  const apptDt = new Date(appt.start_time);
+                  return Math.abs(apptDt - slotDt) < 30 * 60 * 1000; // within 30 min
+                });
+                if (conflict) {
+                  showToast(`⚠️ That slot is already booked for ${conflict.name}. Please choose a different time.`, 'error');
+                  btn.innerText = prevText;
+                  return;
+                }
+              }
               try {
                 let res;
                 if (calendarModal.mode === 'reschedule') {
                   res = await fetch(`${API_BASE}/api/appointments/manual/${calendarModal.rescheduleId}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json', 'x-client-id': (user?.client_code || user?.clientCode) },
-                    body: JSON.stringify({ action: 'reschedule', start_time })
+                    body: JSON.stringify({ start_time })
                   });
                 } else {
+                  const clientId = user?.client_code || user?.clientCode;
                   res = await fetch(`${API_BASE}/api/appointments/manual`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'x-client-id': (user?.client_code || user?.clientCode) },
-                    body: JSON.stringify({ start_time, name: e.target.name.value, phone: e.target.phone.value })
+                    headers: { 'Content-Type': 'application/json', 'x-client-id': clientId },
+                    body: JSON.stringify({ start_time, name: e.target.apptname?.value || calendarModal.prefill?.name, phone: e.target.apptphone?.value || calendarModal.prefill?.phone, client_id: clientId })
                   });
                 }
-                if(!res.ok) throw new Error('Setup failed');
-                showToast(calendarModal.mode === 'reschedule' ? 'Appointment rescheduled!' : 'Appointment successfully booked!', 'success');
+                if(!res.ok) { const err = await res.json(); throw new Error(err.error || 'Failed'); }
+                showToast(calendarModal.mode === 'reschedule' ? 'Appointment rescheduled!' : isFollowup ? 'Follow-up booked!' : 'Appointment booked!', 'success');
                 setCalendarModal(null);
                 fetchAll();
-              } catch(err) { showToast('Execution failed. Check details.','error'); btn.innerText = prevText; }
+              } catch(err) { showToast(err.message || 'Failed. Check details.','error'); btn.innerText = prevText; }
             }} className="p-6 space-y-4">
                <div className="grid grid-cols-2 gap-3">
                  <div>
@@ -2069,16 +2129,31 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                </div>
                <div>
                   <label className="block text-[10px] font-bold text-muted-foreground uppercase mb-1">Client Name</label>
-                  <input name="name" required placeholder="John Doe" defaultValue={calendarModal.prefill?.name || ''} disabled={calendarModal.mode === 'reschedule'} className="w-full bg-background border border-border rounded-lg p-3 text-sm outline-none focus:border-primary transition-colors disabled:opacity-50 cursor-not-allowed" />
+                  <input name="apptname" required={!calendarModal.prefill} placeholder="John Doe" defaultValue={calendarModal.prefill?.name || ''} disabled={calendarModal.mode === 'reschedule'} className="w-full bg-background border border-border rounded-lg p-3 text-sm outline-none focus:border-primary transition-colors disabled:opacity-50 cursor-not-allowed" />
                </div>
                <div>
                   <label className="block text-[10px] font-bold text-muted-foreground uppercase mb-1">Phone Number</label>
-                  <input name="phone" required placeholder="+1234567890" defaultValue={calendarModal.prefill?.phone || ''} disabled={calendarModal.mode === 'reschedule'} className="w-full bg-background border border-border rounded-lg p-3 text-sm outline-none focus:border-primary transition-colors disabled:opacity-50 cursor-not-allowed font-mono" />
+                  <input name="apptphone" required={!calendarModal.prefill} placeholder="+1234567890" defaultValue={calendarModal.prefill?.phone || ''} disabled={calendarModal.mode === 'reschedule'} className="w-full bg-background border border-border rounded-lg p-3 text-sm outline-none focus:border-primary transition-colors disabled:opacity-50 cursor-not-allowed font-mono" />
                </div>
                <button type="submit" className="w-full bg-primary text-white font-bold py-3 rounded-lg shadow-lg shadow-primary/20 hover:bg-primary/90 mt-4 transition-all">
-                  {calendarModal.mode === 'reschedule' ? 'Save New Time' : 'Record Booking Internally'}
+                  {calendarModal.mode === 'reschedule' ? 'Save New Time' : calendarModal.mode === 'followup' ? 'Confirm Follow-Up' : 'Record Booking Internally'}
                </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Custom Confirm Modal (replaces window.confirm) ── */}
+      {confirmModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+          <div className="bg-card border border-border rounded-2xl shadow-premium-lg w-full max-w-sm p-7 scale-in">
+            <div className="text-2xl mb-1">⚠️</div>
+            <h3 className="font-bold text-base tracking-tight mb-2">Confirm Action</h3>
+            <p className="text-sm text-muted-foreground mb-6 leading-relaxed">{confirmModal.message}</p>
+            <div className="flex gap-3">
+              <button onClick={() => setConfirmModal(null)} className="flex-1 py-2.5 rounded-xl border border-border text-sm font-semibold hover:bg-white/5 transition-all">Cancel</button>
+              <button onClick={() => { setConfirmModal(null); confirmModal.onConfirm(); }} className="flex-1 py-2.5 rounded-xl bg-primary text-white text-sm font-bold hover:bg-primary/90 transition-all">Confirm</button>
+            </div>
           </div>
         </div>
       )}
