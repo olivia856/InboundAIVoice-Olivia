@@ -481,6 +481,32 @@ app.post('/api/twilio/inbound', async (req, res) => {
         const companyName = clientRow?.name || "our company";
         const fallbackPrompt = `You are the smart AI receptionist for ${companyName}. Keep answers extremely short, professional, and confident. Focus on booking appointments and answering questions using the Knowledge Base. Avoid repeating your introduction unless specifically asked.`;
         
+        let finalPrompt = agentData?.system_prompt || fallbackPrompt;
+        let initialMessage = undefined;
+
+        // 2.2 Inbound Caller ID Context Injection
+        if (clientId && From) {
+            try {
+                const cleanCaller = String(From).replace(/\D/g, '');
+                if (cleanCaller.length >= 10) {
+                    const { data: leadMatch } = await supabase.from('leads')
+                        .select('name, ai_context')
+                        .eq('client_id', clientId)
+                        .ilike('phone', `%${cleanCaller.slice(-10)}%`)
+                        .maybeSingle();
+                    
+                    if (leadMatch && leadMatch.name) {
+                        console.log(`[Twilio Inbound] Caller ID Match Found: ${leadMatch.name}`);
+                        const ctx = leadMatch.ai_context ? `Their previous interaction/notes: "${leadMatch.ai_context}". ` : '';
+                        finalPrompt += `\n\n[CALLER CONTEXT]: The caller's phone number matched an existing lead in your CRM named "${leadMatch.name}". ${ctx}Greet them by name immediately (e.g. "Hi ${leadMatch.name.split(' ')[0]}, thanks for calling back!").`;
+                        initialMessage = `Hi ${leadMatch.name.split(' ')[0]}, thanks for calling back! How can I help you today?`;
+                    }
+                }
+            } catch (e) {
+                console.error("[Twilio Inbound] Lead lookup error:", e.message);
+            }
+        }
+        
         // 2.5 Load Knowledge Base automatically
         const { data: kbDocs } = clientId ? await supabase.from('knowledge_base').select('content').eq('status', 'Active').eq('client_id', clientId) : { data: [] };
         let contextText = "";
@@ -488,7 +514,7 @@ app.post('/api/twilio/inbound', async (req, res) => {
             contextText = "\n\nCOMPANY KNOWLEDGE BASE (Use this to answer questions):\n" + kbDocs.map(k => k.content).join("\n---\n");
         }
 
-        let finalPrompt = (agentData?.system_prompt || fallbackPrompt) + contextText;
+        finalPrompt += contextText;
         
         const nowIST = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
         const todayISO = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
@@ -704,6 +730,7 @@ app.post('/api/twilio/inbound', async (req, res) => {
                 voice: finalUltravoxVoice,
                 temperature: agentData?.temperature || 0.3,
                 firstSpeaker: "FIRST_SPEAKER_AGENT",
+                initialMessages: initialMessage ? [{ role: 'MESSAGE_ROLE_AGENT', text: initialMessage }] : undefined,
                 medium: { twilio: {} },
                 selectedTools: selectedTools,
                 inactivityMessages: [
