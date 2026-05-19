@@ -651,7 +651,7 @@ app.post('/api/twilio/inbound', async (req, res) => {
                 temporaryTool: {
                     modelToolName: "hangUp",
                     description: "Hang up and terminate the phone call immediately. You MUST call this tool the instant the caller says 'bye', 'goodbye', 'thank you bye', 'see you', 'ok bye', or any farewell. No further speech after calling this tool.",
-                    client: {}
+                    http: { httpMethod: "POST", baseUrlPattern: `${baseUrl}/api/tools/hang_up` }
                 }
             });
         }
@@ -1067,7 +1067,7 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
                 temporaryTool: {
                     modelToolName: "hangUp",
                     description: "Hang up and terminate the phone call immediately. You MUST call this tool the instant the lead says 'bye', 'goodbye', 'thank you bye', 'see you', 'ok bye', or any farewell. No further speech after calling this tool.",
-                    client: {}
+                    http: { httpMethod: "POST", baseUrlPattern: `${baseUrl}/api/tools/hang_up` }
                 }
             });
         }
@@ -1819,6 +1819,7 @@ app.post('/api/tools/log_outcome', async (req, res) => {
 
 app.post('/api/tools/hang_up', async (req, res) => {
     // Respond to Ultravox FIRST so the AI stops talking immediately
+    res.setHeader('X-Ultravox-Response-Type', 'hang-up');
     res.json({ result: "Goodbye! Ending the call now." });
     try {
         const { phone, client_id } = req.body;
