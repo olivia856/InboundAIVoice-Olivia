@@ -876,6 +876,8 @@ app.post('/api/calls/outbound', async (req, res) => {
             url: webhookUrl,
             to: toPhone,
             from: TWILIO_PHONE,
+            machineDetection: 'DetectMessageEnd',
+            machineDetectionTimeout: 20,
             statusCallback: `${serverBaseUrl}/api/twilio/status`,
             statusCallbackEvent: ['completed'],
             record: recordingEnabled,
@@ -949,7 +951,18 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
             contextText = "\n\nCOMPANY KNOWLEDGE BASE (Use this to answer questions):\n" + kbDocs.map(k => k.content).join("\n---\n");
         }
 
+        // --- AMD (Answering Machine Detection) VOICEMAIL LOGIC ---
+        const answeredBy = req.body.AnsweredBy || '';
+        let amdPrompt = "";
+        if (answeredBy.includes('machine')) {
+            console.log(`[Twilio Outbound] VOICEMAIL DETECTED for ${toPhone}. Instructing AI to leave a message.`);
+            amdPrompt = `\n\n[VOICEMAIL PROTOCOL CRITICAL]: You have reached an answering machine. The beep has just played. IMMEDIATELY leave a voicemail. If a specific "VOICEMAIL TEMPLATE" or instructions are provided earlier in your system prompt, use them exactly. Otherwise, leave a brief, professional voicemail mentioning you are calling from ${companyName} and asking them to call back. Do not wait for a response. As soon as you finish your voicemail message, you MUST call the hangUp tool.`;
+        } else if (answeredBy === 'human') {
+            console.log(`[Twilio Outbound] Human answered ${toPhone}. Continuing normally.`);
+        }
+
         let finalPrompt = (agentData?.system_prompt || `You are an outbound sales AI calling a lead on behalf of ${companyName}. Be incredibly persuasive, warm, and brief.`) + contextText;
+        if (amdPrompt) finalPrompt += amdPrompt;
         
         // Add timezone context for outbound calls too
         const nowIST_out = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -1534,6 +1547,32 @@ app.post('/api/twilio/status/:client_id?', async (req, res) => {
                             calls_count: (client.calls_count || 0) + 1,
                             mins_used: (client.mins_used || 0) + Math.ceil(callDuration / 60)
                         }).eq('id', callRow.client_id);
+                    }
+
+                    // --- INJECT CALL SUMMARY INTO LEAD'S AI_CONTEXT ---
+                    try {
+                        const leadPhone = callRow.direction === 'inbound' ? callRow.from_phone : callRow.to_phone;
+                        if (leadPhone) {
+                            const cleanPhone = String(leadPhone).replace(/\D/g, '');
+                            if (cleanPhone.length >= 10) {
+                                const { data: leadMatch } = await supabase.from('leads')
+                                    .select('id, ai_context')
+                                    .eq('client_id', callRow.client_id)
+                                    .ilike('phone', `%${cleanPhone.slice(-10)}%`)
+                                    .maybeSingle();
+                                    
+                                if (leadMatch) {
+                                    const dateStr = new Date().toISOString().split('T')[0];
+                                    const newContext = leadMatch.ai_context 
+                                        ? `${leadMatch.ai_context}\n[${dateStr} Call Summary]: ${summary}`
+                                        : `[${dateStr} Call Summary]: ${summary}`;
+                                    await supabase.from('leads').update({ ai_context: newContext }).eq('id', leadMatch.id);
+                                    console.log(`[Twilio Status] Successfully appended summary to Lead ID: ${leadMatch.id}`);
+                                }
+                            }
+                        }
+                    } catch (err) {
+                        console.error("[Twilio Status] Failed to update lead ai_context:", err);
                     }
                 }
 
