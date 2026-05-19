@@ -635,20 +635,14 @@ app.post('/api/twilio/inbound', async (req, res) => {
         // Add optional tools based on dashboard settings
         if (toolsConfig.hangUp) {
             let finalPromptWithHangup = finalPrompt;
-            finalPromptWithHangup += "\n\nCRITICAL CALL TERMINATION DIRECTIVES:\n1. If the user says 'goodbye', 'bye', or indicates they are leaving, you MUST immediately call the 'hang_up' tool without saying another word.\n2. If the user is silent for more than 15-20 seconds and does not respond to your prompts, you MUST automatically call the 'hang_up' tool to end the call and save costs.";
+            finalPromptWithHangup += "\n\nCRITICAL CALL TERMINATION DIRECTIVES:\n1. If the user says 'goodbye', 'bye', or indicates they are leaving, you MUST immediately call the 'hangUp' tool without saying another word.\n2. If the user is silent for more than 15-20 seconds and does not respond to your prompts, you MUST automatically call the 'hangUp' tool to end the call and save costs.";
             finalPrompt = finalPromptWithHangup;
 
             selectedTools.push({
                 temporaryTool: {
-                    modelToolName: "hang_up",
+                    modelToolName: "hangUp",
                     description: "Hang up and terminate the phone call immediately. You MUST call this tool the instant the caller says 'bye', 'goodbye', 'thank you bye', 'see you', 'ok bye', or any farewell. No further speech after calling this tool.",
-                    dynamicParameters: [
-                        { name: "phone", location: "PARAMETER_LOCATION_BODY", schema: { type: "string", description: "The caller's phone number" }, required: true }
-                    ],
-                    staticParameters: [
-                        { name: "client_id", location: "PARAMETER_LOCATION_BODY", value: clientId }
-                    ],
-                    http: { httpMethod: "POST", baseUrlPattern: `${baseUrl}/api/tools/hang_up` }
+                    clientToolName: "hangUp"
                 }
             });
         }
@@ -1049,20 +1043,14 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
 
         if (toolsConfig.hangUp) {
             let finalPromptWithHangup = finalPrompt;
-            finalPromptWithHangup += "\n\nCRITICAL CALL TERMINATION DIRECTIVES:\n1. If the user says 'goodbye', 'bye', or indicates they are leaving, you MUST immediately call the 'hang_up' tool without saying another word.\n2. If the user is silent for more than 15-20 seconds and does not respond to your prompts, you MUST automatically call the 'hang_up' tool to end the call and save costs.";
+            finalPromptWithHangup += "\n\nCRITICAL CALL TERMINATION DIRECTIVES:\n1. If the user says 'goodbye', 'bye', or indicates they are leaving, you MUST immediately call the 'hangUp' tool without saying another word.\n2. If the user is silent for more than 15-20 seconds and does not respond to your prompts, you MUST automatically call the 'hangUp' tool to end the call and save costs.";
             finalPrompt = finalPromptWithHangup;
 
             selectedTools.push({
                 temporaryTool: {
-                    modelToolName: "hang_up",
+                    modelToolName: "hangUp",
                     description: "Hang up and terminate the phone call immediately. You MUST call this tool the instant the lead says 'bye', 'goodbye', 'thank you bye', 'see you', 'ok bye', or any farewell. No further speech after calling this tool.",
-                    dynamicParameters: [
-                        { name: "phone", location: "PARAMETER_LOCATION_BODY", schema: { type: "string", description: "The lead's phone number" }, required: true }
-                    ],
-                    staticParameters: [
-                        { name: "client_id", location: "PARAMETER_LOCATION_BODY", value: client_id }
-                    ],
-                    http: { httpMethod: "POST", baseUrlPattern: `${baseUrl}/api/tools/hang_up` }
+                    clientToolName: "hangUp"
                 }
             });
         }

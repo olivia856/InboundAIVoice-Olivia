@@ -245,6 +245,18 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
   const showConfirm = (message, onConfirm) => setConfirmModal({ message, onConfirm });
   const [calendarError, setCalendarError] = useState(''); // inline error inside booking modal
 
+  // Auto-save Campaign Goal on change (debounced)
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      const clientId = user?.client_code || user?.clientCode;
+      if (clientId && campaignGoal && campaignGoal !== agentSettings?.campaign_goal) {
+        fetch(`${API_BASE}/api/agent/campaign-goal`, { method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ client_id: clientId, campaign_goal: campaignGoal }) });
+        setAgentSettings(prev => prev ? { ...prev, campaign_goal: campaignGoal } : prev);
+      }
+    }, 1000);
+    return () => clearTimeout(handler);
+  }, [campaignGoal]);
+
   const saveManualLead = async (e) => {
     e.preventDefault();
     try {
@@ -283,7 +295,7 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
     fetch(`${API_BASE}/api/leads${query}`).then(r => r.json()).then(d => { if (d?.success) setLeads(d.leads); }).catch(() => {});
     fetch(`${API_BASE}/api/knowledge_base${query}`).then(r => r.json()).then(d => { if (d?.success) setKnowledgeBase(d.docs); }).catch(() => {});
     fetch(`${API_BASE}/api/campaigns${query}`).then(r => r.json()).then(d => { if (d?.success) setCampaigns(d.campaigns); }).catch(() => {});
-    fetch(`${API_BASE}/api/agent${query}`).then(r => r.json()).then(d => { if (d.success && d.agent) { setAgentSettings(d.agent); if (d.agent.campaign_goal) setCampaignGoal(d.agent.campaign_goal); } }).catch(() => {});
+    fetch(`${API_BASE}/api/agent${query}`).then(r => r.json()).then(d => { if (d.success && d.agent) { setAgentSettings(d.agent); if (d.agent.campaign_goal && !document.getElementById('campaign_goal')?.matches(':focus')) setCampaignGoal(d.agent.campaign_goal); } }).catch(() => {});
     fetch(`${API_BASE}/api/integrations${query}`).then(r => r.json()).then(d => { if (d.success) setIntegrations(d.integrations || []); }).catch(() => {});
     fetch(`${API_BASE}/api/appointments${query}`).then(r => r.json()).then(d => { if (d.success) setAppointments(d.appointments || []); }).catch(() => {});
     fetch(`${API_BASE}/api/reports${query}`).then(r => r.json()).then(d => { if (d.success) setReports(d.metrics); }).catch(() => {});
@@ -422,8 +434,43 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
 
   const [agentToggleModal, setAgentToggleModal] = useState(null); // { action: 'pause'|'enable' }
 
+  // ── Plan Lockout Logic ──
+  const planLimits = { Starter: 500, Pro: 2000, Business: 5000, Enterprise: null };
+  const planKey = (user?.plan || 'Starter').split(' ')[0];
+  const planLimit = planLimits[planKey] ?? null;
+  const nowForLockout = new Date();
+  const thisMonthCallsLockout = callLogs.filter(c => { const d = new Date(c.created_at); return d.getMonth() === nowForLockout.getMonth() && d.getFullYear() === nowForLockout.getFullYear(); });
+  const minsUsed = Math.round(thisMonthCallsLockout.reduce((acc, c) => acc + (c.duration_seconds || c.duration || 0), 0) / 60);
+  const isLockedOut = planLimit !== null && minsUsed >= planLimit;
+
   return (
     <div className={`flex h-screen bg-background text-foreground font-sans overflow-hidden ${theme}`}>
+      
+      {/* ── Plan Lockout Overlay ── */}
+      {isLockedOut && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-md z-[99999] flex flex-col items-center justify-center p-6 text-center">
+          <div className="bg-card border border-red-500/30 shadow-2xl p-8 rounded-2xl max-w-md w-full relative overflow-hidden">
+            <div className="absolute inset-0 bg-red-500/5 z-0" />
+            <div className="relative z-10 flex flex-col items-center">
+               <div className="w-16 h-16 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mb-6">
+                 <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+               </div>
+               <h2 className="text-2xl font-black mb-2 text-foreground">Plan Limit Reached</h2>
+               <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
+                 You have exhausted your <strong>{planLimit} minutes</strong> for the {planKey} plan this month. Your AI agent has been paused. Please upgrade your plan to resume service.
+               </p>
+               <button onClick={() => window.location.href='mailto:support@azlon.ai'} className="w-full py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl font-bold transition-colors">
+                 Contact Support to Upgrade
+               </button>
+               {onBackToAdmin && (
+                 <button onClick={onBackToAdmin} className="mt-4 text-xs font-semibold text-muted-foreground hover:text-foreground">
+                   ← Back to Super Admin
+                 </button>
+               )}
+            </div>
+          </div>
+        </div>
+      )}
       
       {/* AI Agent Toggle Confirmation Modal */}
       {agentToggleModal && (
@@ -622,34 +669,37 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
             </div>
             {/* ── Minutes Usage Widget ── */}
             {(() => {
-              const planLimits = { Starter: 500, Pro: 2000, Business: 5000, Enterprise: null };
-              const planKey = (user?.plan || 'Starter').split(' ')[0];
-              const limit = planLimits[planKey] ?? null;
-              const now = new Date();
-              const monthName = now.toLocaleString('default', { month: 'long', year: 'numeric' });
-              const thisMonthCalls = callLogs.filter(c => { const d = new Date(c.created_at); return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear(); });
-              const minsUsed = Math.round(thisMonthCalls.reduce((acc, c) => acc + (c.duration_seconds || c.duration || 0), 0) / 60);
-              const minsRemaining = limit !== null ? Math.max(0, limit - minsUsed) : null;
-              const pct = limit ? Math.min(100, Math.round((minsUsed / limit) * 100)) : 0;
+              const { planKey, planLimit, nowForLockout, minsUsed } = (() => {
+                const planLimits = { Starter: 500, Pro: 2000, Business: 5000, Enterprise: null };
+                const planKey = (user?.plan || 'Starter').split(' ')[0];
+                const planLimit = planLimits[planKey] ?? null;
+                const now = new Date();
+                const thisMonthCalls = callLogs.filter(c => { const d = new Date(c.created_at); return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear(); });
+                const minsUsed = Math.round(thisMonthCalls.reduce((acc, c) => acc + (c.duration_seconds || c.duration || 0), 0) / 60);
+                return { planKey, planLimit, nowForLockout: now, minsUsed };
+              })();
+              const minsRemaining = planLimit !== null ? Math.max(0, planLimit - minsUsed) : null;
+              const pct = planLimit ? Math.min(100, Math.round((minsUsed / planLimit) * 100)) : 0;
               const barColor = pct > 85 ? 'bg-red-500' : pct > 60 ? 'bg-amber-500' : 'bg-primary';
               return (
-                <div className="bg-card border border-border rounded-2xl p-5 flex items-center gap-6">
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-bold text-muted-foreground uppercase tracking-ultra">Total Minutes — {monthName}</span>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary">{planKey} Plan{limit ? ` · ${limit} mins` : ' · Unlimited'}</span>
-                    </div>
-                    <div className="w-full bg-muted rounded-full h-2 mt-3 mb-2">
-                      <div className={`${barColor} h-2 rounded-full transition-all`} style={{ width: limit ? `${pct}%` : '100%' }} />
-                    </div>
-                    <div className="flex justify-between text-xs text-muted-foreground font-medium">
-                      <span><span className="text-foreground font-bold">{minsUsed}</span> mins used</span>
-                      <span>{limit !== null ? <><span className="text-foreground font-bold">{minsRemaining}</span> mins remaining</> : <span className="text-emerald-400 font-bold">Unlimited</span>}</span>
+                <div className="bg-card border border-border p-6 rounded-2xl shadow-premium relative overflow-hidden group">
+                  <div className="absolute top-0 right-0 p-6 opacity-10 group-hover:opacity-20 transition-opacity">
+                     <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                  </div>
+                  <div className="flex justify-between items-start mb-4 relative z-10">
+                    <div>
+                      <h3 className="font-bold text-foreground">Monthly Usage</h3>
+                      <p className="text-xs text-muted-foreground font-medium mt-1">{nowForLockout.toLocaleString('default', { month: 'long', year: 'numeric' })} • {planKey} Plan</p>
                     </div>
                   </div>
-                  <div className="text-right shrink-0">
-                    <div className="text-3xl font-black text-primary tracking-tight">{thisMonthCalls.length}</div>
-                    <div className="text-xs text-muted-foreground font-medium mt-1">calls this month</div>
+                  <div className="mt-6 relative z-10">
+                    <div className="flex justify-between text-sm mb-2">
+                      <span className="font-bold">{minsUsed} <span className="text-muted-foreground font-normal">mins used</span></span>
+                      <span>{planLimit !== null ? <><span className="text-foreground font-bold">{minsRemaining}</span> mins remaining</> : <span className="text-emerald-400 font-bold">Unlimited</span>}</span>
+                    </div>
+                    <div className="h-2 w-full bg-border rounded-full overflow-hidden">
+                      <div className={`h-full ${barColor} transition-all duration-1000 ease-out`} style={{ width: `${pct}%` }}></div>
+                    </div>
                   </div>
                 </div>
               );
@@ -1651,13 +1701,6 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
               <div>
                 <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">Primary Campaign Goal <span className="text-muted-foreground/50 normal-case font-normal">(auto-saved)</span></label>
                 <textarea id="campaign_goal" value={campaignGoal} onChange={e => setCampaignGoal(e.target.value)}
-                  onBlur={async (e) => {
-                    const clientId = user?.client_code || user?.clientCode;
-                    if (!clientId) return;
-                    // Use dedicated PATCH endpoint - only updates campaign_goal, never overwrites other settings
-                    await fetch(`${API_BASE}/api/agent/campaign-goal`, { method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ client_id: clientId, campaign_goal: e.target.value }) });
-                    showToast('Campaign goal saved!', 'success');
-                  }}
                   placeholder="What is the objective of this outbound call? e.g. 'Get them to book a viewing for next week.'" 
                   className="w-full bg-background border border-border p-3 rounded-lg text-sm outline-none h-20 resize-none focus:border-primary transition-colors"></textarea>
               </div>
@@ -2079,7 +2122,13 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
               btn.innerText = 'Saving...';
               const dateStr = e.target.date.value;
               const timeStr = e.target.time.value;
-              const start_time = `${dateStr}T${timeStr}:00`;
+              
+              // Handle local timezone properly to prevent offset bugs
+              const [year, month, day] = dateStr.split('-');
+              const [hours, minutes] = timeStr.split(':');
+              const d = new Date(year, month - 1, day, hours, minutes);
+              const start_time = d.toISOString();
+              
               // Conflict detection for follow-up and new bookings
               const isFollowup = calendarModal.mode === 'followup';
               const isNew = !calendarModal.mode || isFollowup;
