@@ -1149,7 +1149,9 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                     tools_config: {
                       hangUp: e.target.hangUp.checked,
                       transferCall: e.target.transferCall.checked,
-                      queryCorpus: e.target.queryCorpus.checked
+                      queryCorpus: e.target.queryCorpus.checked,
+                      leaveVoicemail: e.target.leaveVoicemail?.checked ?? false,
+                      playDtmfSounds: e.target.playDtmfSounds?.checked ?? false
                     },
                     record_calls: e.target.record_calls.checked
                   };
@@ -1222,7 +1224,9 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                     {[
                       { id: 'hangUp', label: 'Call Termination', desc: 'Allows AI to hang up' },
                       { id: 'transferCall', label: 'Human Transfer', desc: 'Allows handoff to staff' },
-                      { id: 'queryCorpus', label: 'Knowledge Base Search', desc: 'RAG search on PDFs/Web' }
+                      { id: 'queryCorpus', label: 'Knowledge Base Search', desc: 'RAG search on PDFs/Web' },
+                      { id: 'leaveVoicemail', label: 'Leave Voicemail', desc: 'AI leaves a voicemail and ends call' },
+                      { id: 'playDtmfSounds', label: 'Play DTMF Tones', desc: 'Navigate phone menus with keypresses' }
                     ].map(tool => (
                       <div key={tool.id} className="flex items-center justify-between p-4 bg-sidebar/30 border border-border rounded-xl">
                         <div>

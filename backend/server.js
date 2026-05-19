@@ -708,6 +708,14 @@ app.post('/api/twilio/inbound', async (req, res) => {
             });
         }
 
+        if (toolsConfig.leaveVoicemail) {
+            selectedTools.push({ toolName: "leaveVoicemail" });
+        }
+
+        if (toolsConfig.playDtmfSounds) {
+            selectedTools.push({ toolName: "playDtmfSounds" });
+        }
+
         let apiKeysObj = undefined;
         let finalUltravoxVoice = finalVoice;
         
@@ -1123,6 +1131,14 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
                     http: { httpMethod: "POST", baseUrlPattern: clientId ? `${baseUrl}/api/tools/query-corpus/${clientId}` : `${baseUrl}/api/tools/query-corpus` }
                 }
             });
+        }
+
+        if (toolsConfig.leaveVoicemail) {
+            selectedTools.push({ toolName: "leaveVoicemail" });
+        }
+
+        if (toolsConfig.playDtmfSounds) {
+            selectedTools.push({ toolName: "playDtmfSounds" });
         }
 
         let apiKeysObj = undefined;
