@@ -436,15 +436,24 @@ app.post('/api/twilio/inbound', async (req, res) => {
         console.log(`[Twilio Inbound] Incoming call to ${To}. (Sid: ${CallSid})`);
 
         // 0. Find the Client by Twilio Number (Inbound Routing)
-        const { data: client, error: clientErr } = await supabase.from('clients').select('*').eq('twilio_phone', To).maybeSingle();
+        const { data: client, error: clientErr } = await supabase.from('clients').select('client_code, agent_enabled, plan, mins_used').eq('twilio_phone', To).maybeSingle();
         if (clientErr) console.error("[Twilio Inbound] Database Error during client lookup:", clientErr);
         
         const clientId = client?.client_code || null; 
         console.log(`[Twilio Inbound] Resolved Client: ${clientId || 'NONE'}`);
 
-        if (client && client.agent_enabled === false) {
-            console.log(`[Twilio Inbound] AI Agent is paused for ${To}. Rejecting call.`);
-            return res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response><Reject reason="busy"/></Response>`);
+        if (client) {
+            if (client.agent_enabled === false) {
+                console.log(`[Twilio Inbound] AI Agent is paused for ${To}. Rejecting call.`);
+                return res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response><Reject reason="busy"/></Response>`);
+            }
+            const planLimits = { Starter: 500, Pro: 2000, Business: 5000, Enterprise: null };
+            const planKey = (client.plan || 'Starter').split(' ')[0];
+            const limit = planLimits[planKey] ?? null;
+            if (limit !== null && (client.mins_used || 0) >= limit) {
+                console.log(`[Twilio Inbound] AI Agent limit exhausted for ${To}. Rejecting call.`);
+                return res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response><Reject reason="busy"/></Response>`);
+            }
         }
 
         // 1. Determine key and base URL
@@ -642,7 +651,7 @@ app.post('/api/twilio/inbound', async (req, res) => {
                 temporaryTool: {
                     modelToolName: "hangUp",
                     description: "Hang up and terminate the phone call immediately. You MUST call this tool the instant the caller says 'bye', 'goodbye', 'thank you bye', 'see you', 'ok bye', or any farewell. No further speech after calling this tool.",
-                    clientToolName: "hangUp"
+                    client: {}
                 }
             });
         }
@@ -789,9 +798,17 @@ app.post('/api/calls/outbound', async (req, res) => {
         console.log(`Initiating Outbound Call to: ${toPhone}`);
 
         // 1. Check Twilio Credentials & Agent Status
-        const { data: client } = await supabase.from('clients').select('agent_enabled').eq('id', client_id).maybeSingle();
-        if (client && client.agent_enabled === false) {
-            return res.status(400).json({ error: "AI Agent is currently paused. Please enable it in the dashboard to make outbound calls." });
+        const { data: client } = await supabase.from('clients').select('agent_enabled, plan, mins_used').eq('id', client_id).maybeSingle();
+        if (client) {
+            if (client.agent_enabled === false) {
+                return res.status(400).json({ error: "AI Agent is currently paused. Please enable it in the dashboard to make outbound calls." });
+            }
+            const planLimits = { Starter: 500, Pro: 2000, Business: 5000, Enterprise: null };
+            const planKey = (client.plan || 'Starter').split(' ')[0];
+            const limit = planLimits[planKey] ?? null;
+            if (limit !== null && (client.mins_used || 0) >= limit) {
+                return res.status(400).json({ error: "Plan limit exhausted. Please upgrade your plan to resume outbound calls." });
+            }
         }
 
         const { data: twInt } = await supabase.from('integrations').select('*').eq('provider', 'twilio').eq('client_id', client_id).single();
@@ -1050,7 +1067,7 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
                 temporaryTool: {
                     modelToolName: "hangUp",
                     description: "Hang up and terminate the phone call immediately. You MUST call this tool the instant the lead says 'bye', 'goodbye', 'thank you bye', 'see you', 'ok bye', or any farewell. No further speech after calling this tool.",
-                    clientToolName: "hangUp"
+                    client: {}
                 }
             });
         }

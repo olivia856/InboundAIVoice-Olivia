@@ -446,31 +446,7 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
   return (
     <div className={`flex h-screen bg-background text-foreground font-sans overflow-hidden ${theme}`}>
       
-      {/* ── Plan Lockout Overlay ── */}
-      {isLockedOut && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-md z-[99999] flex flex-col items-center justify-center p-6 text-center">
-          <div className="bg-card border border-red-500/30 shadow-2xl p-8 rounded-2xl max-w-md w-full relative overflow-hidden">
-            <div className="absolute inset-0 bg-red-500/5 z-0" />
-            <div className="relative z-10 flex flex-col items-center">
-               <div className="w-16 h-16 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mb-6">
-                 <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
-               </div>
-               <h2 className="text-2xl font-black mb-2 text-foreground">Plan Limit Reached</h2>
-               <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
-                 You have exhausted your <strong>{planLimit} minutes</strong> for the {planKey} plan this month. Your AI agent has been paused. Please upgrade your plan to resume service.
-               </p>
-               <button onClick={() => window.location.href='mailto:support@azlon.ai'} className="w-full py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl font-bold transition-colors">
-                 Contact Support to Upgrade
-               </button>
-               {onBackToAdmin && (
-                 <button onClick={onBackToAdmin} className="mt-4 text-xs font-semibold text-muted-foreground hover:text-foreground">
-                   ← Back to Super Admin
-                 </button>
-               )}
-            </div>
-          </div>
-        </div>
-      )}
+
       
       {/* AI Agent Toggle Confirmation Modal */}
       {agentToggleModal && (
@@ -604,22 +580,25 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
           {(user?.client_code || user?.clientCode) && (
             <div className="flex items-center justify-between bg-muted/30 rounded-xl px-3 py-2">
               <div className="flex items-center gap-2">
-                <span className={`w-2 h-2 rounded-full ${agentEnabled ? 'bg-emerald-500' : 'bg-red-400'}`} />
+                <span className={`w-2 h-2 rounded-full ${isLockedOut ? 'bg-red-500' : agentEnabled ? 'bg-emerald-500' : 'bg-red-400'}`} />
                 <span className="text-xs text-muted-foreground font-medium">
-                  {agentEnabled ? 'AI Agent Active' : 'AI Agent Paused'}
+                  {isLockedOut ? <span className="text-red-500">Limit Exhausted</span> : agentEnabled ? 'AI Agent Active' : 'AI Agent Paused'}
                 </span>
               </div>
               <button
                 onClick={() => {
+                  if (isLockedOut) { showToast('Plan limit exhausted.', 'error'); return; }
                   setAgentToggleModal({ action: agentEnabled ? 'pause' : 'enable' });
                 }}
+                disabled={isLockedOut}
                 className={`text-[10px] font-bold px-2.5 py-1 rounded-lg transition-all ${
+                  isLockedOut ? 'bg-red-500/10 text-red-500 opacity-50 cursor-not-allowed' :
                   agentEnabled
                     ? 'bg-red-500/10 text-red-500 hover:bg-red-500/20'
                     : 'bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20'
                 }`}
               >
-                {agentEnabled ? 'Pause' : 'Enable'}
+                {isLockedOut ? 'Locked' : agentEnabled ? 'Pause' : 'Enable'}
               </button>
             </div>
           )}
@@ -640,6 +619,17 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
 
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto bg-background p-8">
+        {/* ── Plan Lockout Banner ── */}
+        {isLockedOut && (
+          <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 mb-6 flex items-start gap-4">
+            <div className="mt-0.5 text-red-500"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg></div>
+            <div className="flex-1">
+              <h3 className="text-sm font-bold text-red-500">Plan Limit Exhausted ({planLimit} mins)</h3>
+              <p className="text-xs text-red-400 mt-1">Your AI agent has been paused because you have reached your plan limit for this month. All inbound and outbound calls are disabled. Your dashboard is still accessible.</p>
+            </div>
+            <button onClick={() => window.location.href='mailto:support@azlon.ai'} className="shrink-0 bg-red-500 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-red-600 transition-colors">Contact Support</button>
+          </div>
+        )}
 
         {/* ── DASHBOARD ── */}
         {activePage === 'dashboard' && (
@@ -1643,8 +1633,8 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                   <tbody className="divide-y divide-border/40">
                     {appointments.map((a, i) => (
                       <tr key={i} className="hover:bg-white/[0.02] transition">
-                        <td className="py-3 px-5 font-medium text-sm">{a.name || 'â€”'}</td>
-                        <td className="py-3 px-5 font-mono text-primary text-xs">{a.phone || 'â€”'}</td>
+                        <td className="py-3 px-5 font-medium text-sm">{a.name || '—'}</td>
+                        <td className="py-3 px-5 font-mono text-primary text-xs">{a.phone || '—'}</td>
                         <td className="py-3 px-5 text-xs text-muted-foreground">{a.email || <span className="italic opacity-40">not captured</span>}</td>
                         <td className="py-3 px-5"><span className={cn('px-2.5 py-1 rounded-full text-[10px] uppercase font-bold',
                           a.sms_status === 'Sent' ? 'bg-emerald-500/10 text-emerald-400' : a.sms_status === 'Failed' ? 'bg-red-500/10 text-red-400' : 'bg-gray-500/10 text-gray-400')}>
@@ -1670,6 +1660,9 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
         {/* ── OUTBOUND CAMPAIGNS ── */}
         {activePage === 'campaigns' && (
           <div className="space-y-8 fade-in w-full">
+            <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-xl mb-4">
+              <p className="text-xs text-blue-400 font-semibold">Pro Tip: Keep your Knowledge Base updated to improve AI performance during live campaigns.</p>
+            </div>
             <div><h2 className="text-3xl font-extrabold tracking-tight">Outbound Voice Campaigns</h2><p className="text-sm text-muted-foreground mt-1.5 font-medium">Upload a CSV list to automatically dial contacts sequentially</p></div>
             <div className="bg-card border border-border rounded-2xl p-6 shadow-premium-lg space-y-4">
               <label className="block text-xs font-bold text-muted-foreground uppercase mb-2">Campaign Setup</label>
@@ -1701,6 +1694,13 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
               <div>
                 <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">Primary Campaign Goal <span className="text-muted-foreground/50 normal-case font-normal">(auto-saved)</span></label>
                 <textarea id="campaign_goal" value={campaignGoal} onChange={e => setCampaignGoal(e.target.value)}
+                  onBlur={async (e) => {
+                    const clientId = user?.client_code || user?.clientCode;
+                    if (!clientId) return;
+                    await fetch(`${API_BASE}/api/agent/campaign-goal`, { method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ client_id: clientId, campaign_goal: e.target.value }) });
+                    setAgentSettings(prev => prev ? { ...prev, campaign_goal: e.target.value } : prev);
+                    showToast('Campaign goal saved!', 'success');
+                  }}
                   placeholder="What is the objective of this outbound call? e.g. 'Get them to book a viewing for next week.'" 
                   className="w-full bg-background border border-border p-3 rounded-lg text-sm outline-none h-20 resize-none focus:border-primary transition-colors"></textarea>
               </div>
@@ -1722,7 +1722,7 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                         if(!data.success) { showToast(data.error || 'Dial failed.', 'error'); return; }
                         showToast('Call initiated successfully!', 'success');
                      } catch(e) { showToast('Call dispatch failed','error'); }
-                   }} className="w-full bg-primary hover:bg-primary/90 text-white font-semibold rounded-lg p-2.5 text-sm shadow shadow-primary/20 mt-1 transition">Dial Target</button>
+                   }} disabled={isLockedOut} className="w-full bg-primary hover:bg-primary/90 text-white font-semibold rounded-lg p-2.5 text-sm shadow shadow-primary/20 mt-1 transition disabled:opacity-50">Dial Target</button>
                 </div>
                 
                 <div className="flex flex-col gap-3">
