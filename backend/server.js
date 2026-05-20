@@ -18,7 +18,7 @@ app.use(cors());
 
 // Friendly greeting for the root URL so the browser doesn't show an error
 app.get('/', (req, res) => {
-    res.send('✅ Azlon AI Backend is Live & Running! [v2.5 - path-params]');
+    res.send('✅ Azlon AI Backend is Live & Running! [v2.7 - static-body-params]');
 });
 
 // Version endpoint for deployment verification
@@ -1999,64 +1999,60 @@ app.post('/api/tools/hang_up', async (req, res) => {
 
 app.post('/api/tools/transfer', async (req, res) => {
     try {
-        const { phone } = req.body;
         const paramClientId = req.body.client_id;
         const paramTwilioSid = req.body.twilio_sid;
         const ultravoxCallId = req.body.callId;
 
-        console.log(`[TRANSFER] Triggered for paramClientId=${paramClientId}, paramTwilioSid=${paramTwilioSid}, phone=${phone}, ultravoxCallId=${ultravoxCallId}`);
+        console.log(`[TRANSFER] Triggered. client_id=${paramClientId}, twilio_sid=${paramTwilioSid}, ultravoxCallId=${ultravoxCallId}`);
+        console.log(`[TRANSFER] Full req.body:`, JSON.stringify(req.body));
 
         let activeClientId = paramClientId;
-        let activeTwilioSid = paramTwilioSid;
 
-        if (ultravoxCallId && (!activeClientId || !activeTwilioSid)) {
-            const { data: calls } = await supabase.from('calls').select('twilio_sid, client_id').eq('ultravox_call_id', ultravoxCallId).limit(1);
+        // Fallback: resolve client from ultravox call ID if not in static params
+        if (!activeClientId && ultravoxCallId) {
+            const { data: calls } = await supabase.from('calls').select('client_id').eq('ultravox_call_id', ultravoxCallId).limit(1);
             if (calls && calls.length > 0) {
-                activeClientId = activeClientId || calls[0].client_id;
-                activeTwilioSid = activeTwilioSid || calls[0].twilio_sid;
+                activeClientId = calls[0].client_id;
             }
         }
 
-        if (!activeClientId || !activeTwilioSid) {
-            let query = supabase.from('calls').select('twilio_sid, client_id').eq('client_id', activeClientId).or(`from_phone.ilike.%${phone}%,to_phone.ilike.%${phone}%`).limit(1);
-            const { data: calls } = await query;
-            if (calls && calls.length > 0) {
-                activeClientId = activeClientId || calls[0].client_id;
-                activeTwilioSid = activeTwilioSid || calls[0].twilio_sid;
-            }
+        if (!activeClientId) {
+            console.warn('[TRANSFER] Could not determine client_id.');
+            return res.json({ result: "Transfer failed. Could not identify the client." });
         }
 
-        console.log(`[TRANSFER] Resolved activeClientId=${activeClientId}, activeTwilioSid=${activeTwilioSid}`);
-        if (!activeClientId || !activeTwilioSid) {
-            console.warn('[TRANSFER] Transfer record not found in calls table.');
-            return res.json({ result: "Transfer record not found." });
-        }
-
+        // Look up the transfer number from integrations
         const { data: twInt } = await supabase.from('integrations').select('*').eq('provider', 'twilio').eq('client_id', activeClientId).maybeSingle();
-        if (!twInt?.meta_data?.transfer_number) {
+        const rawTransferNumber = twInt?.meta_data?.transfer_number || '';
+        const cleanTransferNumber = rawTransferNumber ? ('+' + rawTransferNumber.replace(/\D/g, '')) : '';
+
+        if (!cleanTransferNumber) {
             console.warn('[TRANSFER] No transfer number configured for client_id:', activeClientId);
-            return res.json({ result: "No transfer number configured." });
+            return res.json({ result: "No transfer number is configured. Please ask the administrator to set a transfer number in the dashboard." });
         }
 
-        const client = require('twilio')(twInt.meta_data.sid, twInt.api_key);
-        const rawTransferNumber = twInt.meta_data.transfer_number || '';
-        const cleanTransferNumber = '+' + rawTransferNumber.replace(/\D/g, '');
-        console.log(`[TRANSFER] Initiating redirect for call ${activeTwilioSid} to cleanTransferNumber=${cleanTransferNumber}`);
-        await client.calls(activeTwilioSid).update({ twiml: `<Response><Dial>${cleanTransferNumber}</Dial></Response>` });
-        console.log(`[TRANSFER] Successfully updated call ${activeTwilioSid} to dial transfer_number ${cleanTransferNumber}`);
-        res.json({ result: "Transferring now." });
-    } catch (err) { 
-        console.error('[TRANSFER] Error:', err.message);
-        try {
-            if (activeTwilioSid) {
-                await supabase.from('calls').update({ 
-                    caller_name: `TRANSFER ERROR: ${err.message}. Stack: ${err.stack}`
-                }).eq('twilio_sid', activeTwilioSid);
-            }
-        } catch (dbErr) {
-            console.error('Failed to log transfer error to DB:', dbErr.message);
-        }
-        res.status(500).json({ result: "Transfer failed." }); 
+        console.log(`[TRANSFER] Using Ultravox new-stage + coldTransfer to number: ${cleanTransferNumber}`);
+
+        // Use Ultravox Call Stages: respond with new-stage header
+        // This tells Ultravox to enter a new stage with coldTransfer tool targeting the transfer number
+        res.setHeader('X-Ultravox-Response-Type', 'new-stage');
+        res.json({
+            systemPrompt: "You are transferring this call to a human agent. Say nothing else. The transfer is in progress.",
+            selectedTools: [
+                {
+                    toolName: "coldTransfer",
+                    parameterOverrides: {
+                        target: `tel:${cleanTransferNumber}`
+                    }
+                }
+            ],
+            firstSpeakerTools: ["coldTransfer"]
+        });
+
+        console.log(`[TRANSFER] new-stage response sent successfully for client ${activeClientId} → ${cleanTransferNumber}`);
+    } catch (err) {
+        console.error('[TRANSFER] Error:', err.message, err.stack);
+        res.status(500).json({ result: "Transfer failed due to a server error." });
     }
 });
 
