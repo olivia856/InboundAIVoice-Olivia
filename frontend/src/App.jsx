@@ -1126,7 +1126,13 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                     ))}
                     {appointments.length === 0 && <tr><td colSpan="6" className="text-center py-8 text-muted-foreground text-xs">No appointments booked by AI yet. Test by calling your Twilio number!</td></tr>}
                   </tbody>
-                      {/* ── INBOUND AGENT ── */}
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── INBOUND AGENT ── */}
         {activePage === 'agent' && (
           <div className="space-y-8 fade-in w-full">
             <div><h2 className="text-3xl font-extrabold tracking-tight">Inbound Agent</h2><p className="text-sm text-muted-foreground mt-1.5 font-medium">Configure your main AI voice agent that handles inbound calls</p></div>
