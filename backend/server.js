@@ -2023,11 +2023,23 @@ app.post('/api/tools/transfer/:client_id?/:twilio_sid?', async (req, res) => {
         }
 
         const client = require('twilio')(twInt.meta_data.sid, twInt.api_key);
-        await client.calls(activeTwilioSid).update({ twiml: `<Response><Dial>${twInt.meta_data.transfer_number}</Dial></Response>` });
-        console.log(`[TRANSFER] Successfully updated call ${activeTwilioSid} to dial transfer_number ${twInt.meta_data.transfer_number}`);
+        const rawTransferNumber = twInt.meta_data.transfer_number || '';
+        const cleanTransferNumber = '+' + rawTransferNumber.replace(/\D/g, '');
+        console.log(`[TRANSFER] Initiating redirect for call ${activeTwilioSid} to cleanTransferNumber=${cleanTransferNumber}`);
+        await client.calls(activeTwilioSid).update({ twiml: `<Response><Dial>${cleanTransferNumber}</Dial></Response>` });
+        console.log(`[TRANSFER] Successfully updated call ${activeTwilioSid} to dial transfer_number ${cleanTransferNumber}`);
         res.json({ result: "Transferring now." });
     } catch (err) { 
         console.error('[TRANSFER] Error:', err.message);
+        try {
+            if (activeTwilioSid) {
+                await supabase.from('calls').update({ 
+                    transcript: `TRANSFER ERROR: ${err.message}. Stack: ${err.stack}`
+                }).eq('twilio_sid', activeTwilioSid);
+            }
+        } catch (dbErr) {
+            console.error('Failed to log transfer error to DB:', dbErr.message);
+        }
         res.status(500).json({ result: "Transfer failed." }); 
     }
 });
