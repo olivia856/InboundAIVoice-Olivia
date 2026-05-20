@@ -693,7 +693,11 @@ app.post('/api/twilio/inbound', async (req, res) => {
                 temporaryTool: {
                     modelToolName: "hangUp",
                     description: "Hang up and terminate the phone call immediately. You MUST call this tool the instant the caller says 'bye', 'goodbye', 'thank you bye', 'see you', 'ok bye', or any farewell. No further speech after calling this tool.",
-                    http: { httpMethod: "POST", baseUrlPattern: clientId ? `${baseUrl}/api/tools/hang_up/${clientId}/${CallSid}` : `${baseUrl}/api/tools/hang_up` }
+                    staticParameters: [
+                        { name: "client_id", location: "PARAMETER_LOCATION_BODY", value: clientId || '' },
+                        { name: "twilio_sid", location: "PARAMETER_LOCATION_BODY", value: CallSid || '' }
+                    ],
+                    http: { httpMethod: "POST", baseUrlPattern: `${baseUrl}/api/tools/hang_up` }
                 }
             });
         }
@@ -702,8 +706,12 @@ app.post('/api/twilio/inbound', async (req, res) => {
             selectedTools.push({
                 temporaryTool: {
                     modelToolName: "transfer_call",
-                    description: "Transfer the caller to a human representative. Use this if the caller specifically asks to speak to a person or representative.",
-                    http: { httpMethod: "POST", baseUrlPattern: clientId ? `${baseUrl}/api/tools/transfer/${clientId}/${CallSid}` : `${baseUrl}/api/tools/transfer` }
+                    description: "Transfer the caller to a human representative. Use this if the caller specifically asks to speak to a person or representative. Call this immediately without asking for any phone number.",
+                    staticParameters: [
+                        { name: "client_id", location: "PARAMETER_LOCATION_BODY", value: clientId || '' },
+                        { name: "twilio_sid", location: "PARAMETER_LOCATION_BODY", value: CallSid || '' }
+                    ],
+                    http: { httpMethod: "POST", baseUrlPattern: `${baseUrl}/api/tools/transfer` }
                 }
             });
         }
@@ -1139,7 +1147,11 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
                 temporaryTool: {
                     modelToolName: "hangUp",
                     description: "Hang up and terminate the phone call immediately. You MUST call this tool the instant the lead says 'bye', 'goodbye', 'thank you bye', 'see you', 'ok bye', or any farewell. No further speech after calling this tool.",
-                    http: { httpMethod: "POST", baseUrlPattern: clientId ? `${baseUrl}/api/tools/hang_up/${clientId}/${callSid}` : `${baseUrl}/api/tools/hang_up` }
+                    staticParameters: [
+                        { name: "client_id", location: "PARAMETER_LOCATION_BODY", value: clientId || '' },
+                        { name: "twilio_sid", location: "PARAMETER_LOCATION_BODY", value: callSid || '' }
+                    ],
+                    http: { httpMethod: "POST", baseUrlPattern: `${baseUrl}/api/tools/hang_up` }
                 }
             });
         }
@@ -1148,8 +1160,12 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
             selectedTools.push({
                 temporaryTool: {
                     modelToolName: "transfer_call",
-                    description: "Transfer the caller to a human representative. Use this if the lead specifically asks to speak to a person or representative.",
-                    http: { httpMethod: "POST", baseUrlPattern: clientId ? `${baseUrl}/api/tools/transfer/${clientId}/${callSid}` : `${baseUrl}/api/tools/transfer` }
+                    description: "Transfer the caller to a human representative. Use this if the lead specifically asks to speak to a person or representative. Call this immediately without asking for any phone number.",
+                    staticParameters: [
+                        { name: "client_id", location: "PARAMETER_LOCATION_BODY", value: clientId || '' },
+                        { name: "twilio_sid", location: "PARAMETER_LOCATION_BODY", value: callSid || '' }
+                    ],
+                    http: { httpMethod: "POST", baseUrlPattern: `${baseUrl}/api/tools/transfer` }
                 }
             });
         }
@@ -1933,14 +1949,14 @@ app.post('/api/tools/log_outcome', async (req, res) => {
     } catch(err) { res.status(500).json({ result: "Failed to log" }); }
 });
 
-app.post('/api/tools/hang_up/:client_id?/:twilio_sid?', async (req, res) => {
+app.post('/api/tools/hang_up', async (req, res) => {
     // Respond to Ultravox FIRST so the AI stops talking immediately
     res.setHeader('X-Ultravox-Response-Type', 'hang-up');
     res.json({ result: "Goodbye! Ending the call now." });
     try {
         const { phone } = req.body;
-        const paramClientId = req.params.client_id || req.body.client_id;
-        const paramTwilioSid = req.params.twilio_sid || req.body.twilio_sid;
+        const paramClientId = req.body.client_id;
+        const paramTwilioSid = req.body.twilio_sid;
         const ultravoxCallId = req.body.callId;
 
         console.log(`[HANG_UP] Triggered for paramClientId=${paramClientId}, paramTwilioSid=${paramTwilioSid}, phone=${phone}, ultravoxCallId=${ultravoxCallId}`);
@@ -1981,11 +1997,11 @@ app.post('/api/tools/hang_up/:client_id?/:twilio_sid?', async (req, res) => {
     } catch(err) { console.error('[HANG_UP] Error:', err.message); }
 });
 
-app.post('/api/tools/transfer/:client_id?/:twilio_sid?', async (req, res) => {
+app.post('/api/tools/transfer', async (req, res) => {
     try {
         const { phone } = req.body;
-        const paramClientId = req.params.client_id || req.body.client_id;
-        const paramTwilioSid = req.params.twilio_sid || req.body.twilio_sid;
+        const paramClientId = req.body.client_id;
+        const paramTwilioSid = req.body.twilio_sid;
         const ultravoxCallId = req.body.callId;
 
         console.log(`[TRANSFER] Triggered for paramClientId=${paramClientId}, paramTwilioSid=${paramTwilioSid}, phone=${phone}, ultravoxCallId=${ultravoxCallId}`);
@@ -2034,7 +2050,7 @@ app.post('/api/tools/transfer/:client_id?/:twilio_sid?', async (req, res) => {
         try {
             if (activeTwilioSid) {
                 await supabase.from('calls').update({ 
-                    transcript: `TRANSFER ERROR: ${err.message}. Stack: ${err.stack}`
+                    caller_name: `TRANSFER ERROR: ${err.message}. Stack: ${err.stack}`
                 }).eq('twilio_sid', activeTwilioSid);
             }
         } catch (dbErr) {
