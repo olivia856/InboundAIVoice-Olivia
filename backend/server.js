@@ -883,23 +883,33 @@ app.post('/api/calls/outbound', async (req, res) => {
         
         const webhookUrl = `${serverBaseUrl}/api/twilio/outbound-twiml?toPhone=${encodeURIComponent(toPhone || '')}&voice=${encodeURIComponent(voice || '')}&goal=${encodeURIComponent(goal || '')}&name=${encodeURIComponent(name || '')}&client_id=${encodeURIComponent(client_id || '')}`;
 
-        // Get agent settings to check if recording is enabled
-        const { data: agentData } = await supabase.from('agent_settings').select('record_calls').eq('client_id', client_id).limit(1).maybeSingle();
+        // Get agent settings to check if recording and voicemail are enabled
+        const { data: agentData } = await supabase.from('agent_settings').select('record_calls, tools_config').eq('client_id', client_id).limit(1).maybeSingle();
         const recordingEnabled = agentData?.record_calls !== false;
+        const toolsConfig = agentData?.tools_config || {};
+        const leaveVoicemailEnabled = toolsConfig.leaveVoicemail === true;
 
-        // 3. Directly command Twilio to physically dial the lead
-        const call = await twilioClient.calls.create({
+        const callOptions = {
             url: webhookUrl,
             to: toPhone,
             from: TWILIO_PHONE,
-            machineDetection: 'DetectMessageEnd',
-            machineDetectionTimeout: 20,
             statusCallback: `${serverBaseUrl}/api/twilio/status`,
             statusCallbackEvent: ['completed'],
             record: recordingEnabled,
             recordingStatusCallback: `${serverBaseUrl}/api/twilio/recording-callback`,
             recordingStatusCallbackEvent: ['completed']
-        });
+        };
+
+        if (leaveVoicemailEnabled) {
+            callOptions.machineDetection = 'DetectMessageEnd';
+            callOptions.machineDetectionTimeout = 15;
+            callOptions.machineDetectionSpeechThreshold = 2000;
+            callOptions.machineDetectionSpeechEndThreshold = 1000;
+            callOptions.machineDetectionSilenceTimeout = 3000;
+        }
+
+        // 3. Directly command Twilio to physically dial the lead
+        const call = await twilioClient.calls.create(callOptions);
 
         // 4. SECURE LOGGING: Write the outbound call directly into your Supabase Data Table!
         await supabase.from('calls').insert([{
@@ -2369,18 +2379,45 @@ async function launchCampaignWithContacts(contacts, campaignName, voice, goal, s
             serverBaseUrl = `https://${process.env.RAILWAY_PUBLIC_DOMAIN || 'localhost'}`;
         }
 
+        let agentData = null;
+        try {
+            const { data } = await supabase.from('agent_settings').select('record_calls, tools_config').eq('client_id', client_id).limit(1).maybeSingle();
+            agentData = data;
+        } catch(err) {
+            console.error("Error fetching agent settings for campaign:", err.message);
+        }
+        const recordingEnabled = agentData?.record_calls !== false;
+        const toolsConfig = agentData?.tools_config || {};
+        const leaveVoicemailEnabled = toolsConfig.leaveVoicemail === true;
+
         for (let i = 0; i < contacts.length; i++) {
             const contact = contacts[i];
             try {
                 const webhookUrl = `${serverBaseUrl}/api/twilio/outbound-twiml?toPhone=${encodeURIComponent(contact.phone)}&voice=${encodeURIComponent(voice || '')}&goal=${encodeURIComponent(goal || '')}&name=${encodeURIComponent(contact.name || '')}&client_id=${encodeURIComponent(client_id || '')}`;
                 
-                const call = await twilioClient.calls.create({
+                const callOptions = {
                     url: webhookUrl,
                     to: contact.phone,
                     from: TWILIO_PHONE,
                     statusCallback: `${serverBaseUrl}/api/twilio/status`,
                     statusCallbackEvent: ['completed']
-                });
+                };
+
+                if (recordingEnabled) {
+                    callOptions.record = true;
+                    callOptions.recordingStatusCallback = `${serverBaseUrl}/api/twilio/recording-callback`;
+                    callOptions.recordingStatusCallbackEvent = ['completed'];
+                }
+
+                if (leaveVoicemailEnabled) {
+                    callOptions.machineDetection = 'DetectMessageEnd';
+                    callOptions.machineDetectionTimeout = 15;
+                    callOptions.machineDetectionSpeechThreshold = 2000;
+                    callOptions.machineDetectionSpeechEndThreshold = 1000;
+                    callOptions.machineDetectionSilenceTimeout = 3000;
+                }
+
+                const call = await twilioClient.calls.create(callOptions);
 
                 await supabase.from('calls').insert([{
                     direction: 'outbound',
