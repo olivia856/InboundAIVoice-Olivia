@@ -63,7 +63,7 @@ function InboundWebhookCard({ clientId, apiBase }) {
 function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
   const [activePage, setActivePage] = useState('dashboard');
   const [agentEnabled, setAgentEnabled] = useState(user?.agentEnabled !== false);
-  const [twilioConfig, setTwilioConfig] = useState({ sid: '', api_key: '', phone: '' });
+  const [twilioConfig, setTwilioConfig] = useState({ sid: '', api_key: '', phone: '', transfer_number: '' });
   const [uvConfig, setUVConfig] = useState({ api_key: '' });
   const [elevenLabsConfig, setElevenLabsConfig] = useState({ api_key: '', voice_id: '' });
   const [resendConfig, setResendConfig] = useState({ api_key: '' });

@@ -693,7 +693,7 @@ app.post('/api/twilio/inbound', async (req, res) => {
                 temporaryTool: {
                     modelToolName: "hangUp",
                     description: "Hang up and terminate the phone call immediately. You MUST call this tool the instant the caller says 'bye', 'goodbye', 'thank you bye', 'see you', 'ok bye', or any farewell. No further speech after calling this tool.",
-                    http: { httpMethod: "POST", baseUrlPattern: `${baseUrl}/api/tools/hang_up` }
+                    http: { httpMethod: "POST", baseUrlPattern: clientId ? `${baseUrl}/api/tools/hang_up/${clientId}` : `${baseUrl}/api/tools/hang_up` }
                 }
             });
         }
@@ -706,7 +706,7 @@ app.post('/api/twilio/inbound', async (req, res) => {
                     dynamicParameters: [
                         { name: "phone", location: "PARAMETER_LOCATION_BODY", schema: { type: "string", description: "The caller's phone number" }, required: true }
                     ],
-                    http: { httpMethod: "POST", baseUrlPattern: `${baseUrl}/api/tools/transfer` }
+                    http: { httpMethod: "POST", baseUrlPattern: clientId ? `${baseUrl}/api/tools/transfer/${clientId}` : `${baseUrl}/api/tools/transfer` }
                 }
             });
         }
@@ -1141,7 +1141,7 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
                 temporaryTool: {
                     modelToolName: "hangUp",
                     description: "Hang up and terminate the phone call immediately. You MUST call this tool the instant the lead says 'bye', 'goodbye', 'thank you bye', 'see you', 'ok bye', or any farewell. No further speech after calling this tool.",
-                    http: { httpMethod: "POST", baseUrlPattern: `${baseUrl}/api/tools/hang_up` }
+                    http: { httpMethod: "POST", baseUrlPattern: clientId ? `${baseUrl}/api/tools/hang_up/${clientId}` : `${baseUrl}/api/tools/hang_up` }
                 }
             });
         }
@@ -1154,7 +1154,7 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
                     dynamicParameters: [
                         { name: "phone", location: "PARAMETER_LOCATION_BODY", schema: { type: "string", description: "The lead's phone number" }, required: true }
                     ],
-                    http: { httpMethod: "POST", baseUrlPattern: `${baseUrl}/api/tools/transfer` }
+                    http: { httpMethod: "POST", baseUrlPattern: clientId ? `${baseUrl}/api/tools/transfer/${clientId}` : `${baseUrl}/api/tools/transfer` }
                 }
             });
         }
@@ -1938,24 +1938,34 @@ app.post('/api/tools/log_outcome', async (req, res) => {
     } catch(err) { res.status(500).json({ result: "Failed to log" }); }
 });
 
-app.post('/api/tools/hang_up', async (req, res) => {
+app.post('/api/tools/hang_up/:client_id?', async (req, res) => {
     // Respond to Ultravox FIRST so the AI stops talking immediately
     res.setHeader('X-Ultravox-Response-Type', 'hang-up');
     res.json({ result: "Goodbye! Ending the call now." });
     try {
-        const { phone, client_id } = req.body;
-        console.log(`[HANG_UP] Triggered for client_id=${client_id}, phone=${phone}`);
-        if (!client_id) { console.warn('[HANG_UP] No client_id passed - cannot terminate'); return; }
-        const cleanPhone = String(phone || '').replace(/\D/g, '');
-        // Find the most recent active call for this client
-        let query = supabase.from('calls').select('twilio_sid').eq('client_id', client_id).order('created_at', { ascending: false }).limit(1);
-        if (cleanPhone.length > 5) {
-            query = supabase.from('calls').select('twilio_sid').eq('client_id', client_id).or(`from_phone.ilike.%${cleanPhone}%,to_phone.ilike.%${cleanPhone}%`).order('created_at', { ascending: false }).limit(1);
+        const { phone } = req.body;
+        const client_id = req.params.client_id || req.body.client_id;
+        const ultravoxCallId = req.body.callId;
+
+        console.log(`[HANG_UP] Triggered for client_id=${client_id}, phone=${phone}, ultravoxCallId=${ultravoxCallId}`);
+        
+        let query;
+        if (ultravoxCallId) {
+            query = supabase.from('calls').select('twilio_sid, client_id').eq('ultravox_call_id', ultravoxCallId).limit(1);
+        } else {
+            if (!client_id) { console.warn('[HANG_UP] No client_id passed - cannot terminate'); return; }
+            const cleanPhone = String(phone || '').replace(/\D/g, '');
+            query = supabase.from('calls').select('twilio_sid, client_id').eq('client_id', client_id).order('created_at', { ascending: false }).limit(1);
+            if (cleanPhone.length > 5) {
+                query = supabase.from('calls').select('twilio_sid, client_id').eq('client_id', client_id).or(`from_phone.ilike.%${cleanPhone}%,to_phone.ilike.%${cleanPhone}%`).order('created_at', { ascending: false }).limit(1);
+            }
         }
+
         const { data: calls } = await query;
         console.log(`[HANG_UP] Found calls:`, calls?.length, calls?.[0]?.twilio_sid);
         if (calls && calls.length > 0 && calls[0].twilio_sid) {
-            const { data: twInt } = await supabase.from('integrations').select('*').eq('provider', 'twilio').eq('client_id', client_id).maybeSingle();
+            const activeClientId = calls[0].client_id;
+            const { data: twInt } = await supabase.from('integrations').select('*').eq('provider', 'twilio').eq('client_id', activeClientId).maybeSingle();
             if (twInt?.meta_data?.sid && twInt?.api_key) {
                 const twilioClient = require('twilio')(twInt.meta_data.sid, twInt.api_key);
                 await twilioClient.calls(calls[0].twilio_sid).update({ status: 'completed' });
@@ -1965,19 +1975,43 @@ app.post('/api/tools/hang_up', async (req, res) => {
     } catch(err) { console.error('[HANG_UP] Error:', err.message); }
 });
 
-app.post('/api/tools/transfer', async (req, res) => {
+app.post('/api/tools/transfer/:client_id?', async (req, res) => {
     try {
-        const { phone, client_id } = req.body;
-        const { data: calls } = await supabase.from('calls').select('twilio_sid').eq('client_id', client_id).or(`from_phone.ilike.%${phone}%,to_phone.ilike.%${phone}%`).limit(1);
-        if (!calls || calls.length === 0) return res.json({ result: "Transfer record not found." });
+        const { phone } = req.body;
+        const client_id = req.params.client_id || req.body.client_id;
+        const ultravoxCallId = req.body.callId;
 
-        const { data: twInt } = await supabase.from('integrations').select('*').eq('provider', 'twilio').eq('client_id', client_id).maybeSingle();
-        if (!twInt?.meta_data?.transfer_number) return res.json({ result: "No transfer number configured." });
+        console.log(`[TRANSFER] Triggered for client_id=${client_id}, phone=${phone}, ultravoxCallId=${ultravoxCallId}`);
+
+        let query;
+        if (ultravoxCallId) {
+            query = supabase.from('calls').select('twilio_sid, client_id').eq('ultravox_call_id', ultravoxCallId).limit(1);
+        } else {
+            if (!client_id) return res.status(400).json({ result: "Missing client_id." });
+            query = supabase.from('calls').select('twilio_sid, client_id').eq('client_id', client_id).or(`from_phone.ilike.%${phone}%,to_phone.ilike.%${phone}%`).limit(1);
+        }
+
+        const { data: calls } = await query;
+        if (!calls || calls.length === 0) {
+            console.warn('[TRANSFER] Transfer record not found in calls table.');
+            return res.json({ result: "Transfer record not found." });
+        }
+
+        const activeClientId = calls[0].client_id;
+        const { data: twInt } = await supabase.from('integrations').select('*').eq('provider', 'twilio').eq('client_id', activeClientId).maybeSingle();
+        if (!twInt?.meta_data?.transfer_number) {
+            console.warn('[TRANSFER] No transfer number configured for client_id:', activeClientId);
+            return res.json({ result: "No transfer number configured." });
+        }
 
         const client = require('twilio')(twInt.meta_data.sid, twInt.api_key);
         await client.calls(calls[0].twilio_sid).update({ twiml: `<Response><Dial>${twInt.meta_data.transfer_number}</Dial></Response>` });
+        console.log(`[TRANSFER] Successfully updated call ${calls[0].twilio_sid} to dial transfer_number ${twInt.meta_data.transfer_number}`);
         res.json({ result: "Transferring now." });
-    } catch (err) { res.status(500).json({ result: "Transfer failed." }); }
+    } catch (err) { 
+        console.error('[TRANSFER] Error:', err.message);
+        res.status(500).json({ result: "Transfer failed." }); 
+    }
 });
 
 // --- SUPER ADMIN PLATFORM STATS ---
@@ -2150,6 +2184,7 @@ app.get('/api/integrations/twilio', async (req, res) => {
         const masked = {
             sid: data.meta_data?.sid || '',
             phone: data.meta_data?.phone || '',
+            transfer_number: data.meta_data?.transfer_number || '',
             api_key: data.api_key ? (data.api_key.substring(0, 4) + '****************' + data.api_key.substring(data.api_key.length - 4)) : ''
         };
         res.json({ success: true, integration: masked });
@@ -2158,7 +2193,7 @@ app.get('/api/integrations/twilio', async (req, res) => {
 
 app.post('/api/integrations/twilio', async (req, res) => {
     try {
-        const { sid, api_key, phone, client_id } = req.body;
+        const { sid, api_key, phone, transfer_number, client_id } = req.body;
         const { data: existing } = await supabase.from('integrations').select('*').eq('provider', 'twilio').eq('client_id', client_id).maybeSingle();
         
         let finalApiKey = api_key?.trim();
@@ -2169,7 +2204,11 @@ app.post('/api/integrations/twilio', async (req, res) => {
         const payload = { 
             provider: 'twilio', 
             api_key: finalApiKey, 
-            meta_data: { sid: sid?.trim(), phone: phone?.trim() },
+            meta_data: { 
+                sid: sid?.trim(), 
+                phone: phone?.trim(), 
+                transfer_number: transfer_number?.trim() 
+            },
             client_id
         };
         
