@@ -399,6 +399,7 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
     { id: 'dashboard', label: 'Dashboard', svgPath: <><rect x="3" y="3" width="7" height="7" rx="1.5" fill="currentColor" opacity="0.9"/><rect x="14" y="3" width="7" height="7" rx="1.5" fill="currentColor" opacity="0.6"/><rect x="3" y="14" width="7" height="7" rx="1.5" fill="currentColor" opacity="0.6"/><rect x="14" y="14" width="7" height="7" rx="1.5" fill="currentColor" opacity="0.4"/></> },
     { id: 'calendar', label: 'Calendar', svgPath: <><rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="1.5" fill="none"/><line x1="3" y1="10" x2="21" y2="10" stroke="currentColor" strokeWidth="1.5"/><line x1="8" y1="3" x2="8" y2="7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><line x1="16" y1="3" x2="16" y2="7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><circle cx="8" cy="15" r="1" fill="currentColor"/><circle cx="12" cy="15" r="1" fill="currentColor"/><circle cx="16" cy="15" r="1" fill="currentColor"/></> },
     { id: 'agent', label: 'Inbound Agent', svgPath: <><circle cx="12" cy="8" r="3.5" stroke="currentColor" strokeWidth="1.5" fill="none"/><path d="M5 20c0-3.87 3.13-7 7-7s7 3.13 7 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" fill="none"/><circle cx="19" cy="8" r="1.5" fill="currentColor" opacity="0.6"/><line x1="19" y1="5" x2="19" y2="3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></> },
+    { id: 'tools', label: 'Tools', svgPath: <><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/></> },
     { id: 'campaigns', label: 'Outbound Campaigns', svgPath: <><path d="M22 2L11 13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/><path d="M22 2L15 22l-4-9-9-4 20-7z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/></> },
     { id: 'logs', label: 'Call Logs', svgPath: <><path d="M5 4h4l2 5-2.5 1.5a11 11 0 005 5L15 13l5 2v4a2 2 0 01-2 2A16 16 0 013 5a2 2 0 012-1z" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/><circle cx="18" cy="6" r="2.5" fill="currentColor" opacity="0.6"/></> },
     { id: 'knowledge_base', label: 'Knowledge Base', svgPath: <><rect x="4" y="3" width="12" height="16" rx="1.5" stroke="currentColor" strokeWidth="1.5" fill="none"/><line x1="7" y1="8" x2="13" y2="8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><line x1="7" y1="11" x2="13" y2="11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><line x1="7" y1="14" x2="10" y2="14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><path d="M16 6h2a2 2 0 012 2v11a2 2 0 01-2 2H8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" fill="none"/></> },
@@ -1125,13 +1126,7 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                     ))}
                     {appointments.length === 0 && <tr><td colSpan="6" className="text-center py-8 text-muted-foreground text-xs">No appointments booked by AI yet. Test by calling your Twilio number!</td></tr>}
                   </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ── INBOUND AGENT ── */}
+                      {/* ── INBOUND AGENT ── */}
         {activePage === 'agent' && (
           <div className="space-y-8 fade-in w-full">
             <div><h2 className="text-3xl font-extrabold tracking-tight">Inbound Agent</h2><p className="text-sm text-muted-foreground mt-1.5 font-medium">Configure your main AI voice agent that handles inbound calls</p></div>
@@ -1146,14 +1141,14 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                     personality: e.target.personality.value,
                     voice_preset: e.target.voice.value,
                     temperature: parseFloat(e.target.temp.value),
-                    tools_config: {
-                      hangUp: e.target.hangUp.checked,
-                      transferCall: e.target.transferCall.checked,
-                      queryCorpus: e.target.queryCorpus.checked,
-                      leaveVoicemail: e.target.leaveVoicemail?.checked ?? false,
-                      playDtmfSounds: e.target.playDtmfSounds?.checked ?? false
+                    tools_config: agentSettings.tools_config || {
+                      hangUp: true,
+                      transferCall: false,
+                      queryCorpus: false,
+                      leaveVoicemail: false,
+                      playDtmfSounds: false
                     },
-                    record_calls: e.target.record_calls.checked
+                    record_calls: agentSettings.record_calls !== false
                   };
                   const res = await fetch(`${API_BASE}/api/agent`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...payload, client_id: (user?.client_code || user?.clientCode) }) });
                   const data = await res.json();
@@ -1217,42 +1212,141 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                     <input name="temp" type="number" step="0.1" max="1" min="0" defaultValue={agentSettings.temperature} className="w-full bg-background border border-border rounded-lg p-3 text-sm outline-none" />
                   </div>
                 </div>
-
-                <div className="mt-8 pt-6 border-t border-border">
-                  <h3 className="font-semibold text-sm mb-4">Built-in AI Capabilities (Tool Toggling)</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {[
-                      { id: 'hangUp', label: 'Call Termination', desc: 'Allows AI to hang up' },
-                      { id: 'transferCall', label: 'Human Transfer', desc: 'Allows handoff to staff' },
-                      { id: 'queryCorpus', label: 'Knowledge Base Search', desc: 'RAG search on PDFs/Web' },
-                      { id: 'leaveVoicemail', label: 'Leave Voicemail', desc: 'AI leaves a voicemail and ends call' },
-                      { id: 'playDtmfSounds', label: 'Play DTMF Tones', desc: 'Navigate phone menus with keypresses' }
-                    ].map(tool => (
-                      <div key={tool.id} className="flex items-center justify-between p-4 bg-sidebar/30 border border-border rounded-xl">
-                        <div>
-                          <div className="text-[11px] font-bold uppercase tracking-wider">{tool.label}</div>
-                          <div className="text-[10px] text-muted-foreground">{tool.desc}</div>
-                        </div>
-                        <label className="relative inline-flex items-center cursor-pointer">
-                          <input type="checkbox" name={tool.id} defaultChecked={agentSettings.tools_config?.[tool.id] ?? true} className="sr-only peer" />
-                          <div className="w-9 h-5 bg-border peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
-                        </label>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="mt-4 p-4 bg-primary/5 border border-primary/20 rounded-xl flex items-center justify-between">
-                    <div>
-                       <div className="text-[11px] font-bold text-primary uppercase tracking-wider">Master Call Recording</div>
-                       <div className="text-[10px] text-muted-foreground">Automatically record and store all calls in AWS S3</div>
-                    </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input type="checkbox" name="record_calls" defaultChecked={agentSettings.record_calls !== false} className="sr-only peer" />
-                      <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
-                    </label>
-                  </div>
-                </div>
                 <div className="mt-8 flex justify-end pt-4 border-t border-border">
                   <button id="save-agent-btn" type="submit" className="bg-primary hover:bg-primary/90 text-white font-semibold px-8 py-3 rounded-lg text-sm shadow-lg shadow-primary/20 transition">Save Configuration</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* ── TOOLS ── */}
+        {activePage === 'tools' && (
+          <div className="space-y-8 fade-in w-full">
+            <div>
+              <h2 className="text-3xl font-extrabold tracking-tight">Built-in Tools & Capabilities</h2>
+              <p className="text-sm text-muted-foreground mt-1.5 font-medium">Configure advanced voice capabilities that apply dynamically to both inbound and outbound calls</p>
+            </div>
+            
+            <div className="bg-card border border-border rounded-2xl p-6 shadow-premium-lg">
+              <form onSubmit={async (e) => {
+                e.preventDefault();
+                const btn = document.getElementById('save-tools-btn');
+                btn.innerText = 'Saving...';
+                try {
+                  const payload = {
+                    ...agentSettings,
+                    tools_config: {
+                      hangUp: e.target.hangUp.checked,
+                      transferCall: e.target.transferCall.checked,
+                      queryCorpus: e.target.queryCorpus.checked,
+                      leaveVoicemail: e.target.leaveVoicemail.checked,
+                      playDtmfSounds: e.target.playDtmfSounds.checked
+                    },
+                    record_calls: e.target.record_calls.checked
+                  };
+                  const res = await fetch(`${API_BASE}/api/agent`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ...payload, client_id: (user?.client_code || user?.clientCode) })
+                  });
+                  const data = await res.json();
+                  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+                  
+                  setAgentSettings(prev => ({
+                    ...prev,
+                    tools_config: payload.tools_config,
+                    record_calls: payload.record_calls
+                  }));
+                  
+                  btn.innerText = 'Saved!';
+                  showToast('Tools configuration updated and live!', 'success');
+                  setTimeout(() => btn.innerText = 'Save Configuration', 2000);
+                } catch(err) {
+                  btn.innerText = 'Save Configuration';
+                  showToast('Save failed: ' + err.message, 'error');
+                }
+              }}>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Call Controls Group */}
+                  <div className="space-y-4">
+                    <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest border-b border-border pb-2">Telephony & Call Control</h3>
+                    
+                    <div className="flex items-center justify-between p-4 bg-sidebar/30 border border-border rounded-xl">
+                      <div>
+                        <div className="text-[11px] font-bold uppercase tracking-wider">Call Termination</div>
+                        <div className="text-[10px] text-muted-foreground">Allows AI to hang up automatically when caller says goodbye</div>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" name="hangUp" defaultChecked={agentSettings.tools_config?.hangUp ?? true} className="sr-only peer" />
+                        <div className="w-9 h-5 bg-border peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+                      </label>
+                    </div>
+
+                    <div className="flex items-center justify-between p-4 bg-sidebar/30 border border-border rounded-xl">
+                      <div>
+                        <div className="text-[11px] font-bold uppercase tracking-wider">Human Transfer</div>
+                        <div className="text-[10px] text-muted-foreground">Allows AI to transfer calls to a human agent when requested</div>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" name="transferCall" defaultChecked={agentSettings.tools_config?.transferCall ?? false} className="sr-only peer" />
+                        <div className="w-9 h-5 bg-border peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+                      </label>
+                    </div>
+
+                    <div className="flex items-center justify-between p-4 bg-sidebar/30 border border-border rounded-xl">
+                      <div>
+                        <div className="text-[11px] font-bold uppercase tracking-wider">Play DTMF Tones</div>
+                        <div className="text-[10px] text-muted-foreground">Allows AI to press keys to navigate IVR telephone systems</div>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" name="playDtmfSounds" defaultChecked={agentSettings.tools_config?.playDtmfSounds ?? false} className="sr-only peer" />
+                        <div className="w-9 h-5 bg-border peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* AI & Automation Group */}
+                  <div className="space-y-4">
+                    <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest border-b border-border pb-2">AI Intelligence & Recording</h3>
+
+                    <div className="flex items-center justify-between p-4 bg-sidebar/30 border border-border rounded-xl">
+                      <div>
+                        <div className="text-[11px] font-bold uppercase tracking-wider">Knowledge Base Search</div>
+                        <div className="text-[10px] text-muted-foreground">Enables RAG searches on uploaded documents/website URLs</div>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" name="queryCorpus" defaultChecked={agentSettings.tools_config?.queryCorpus ?? false} className="sr-only peer" />
+                        <div className="w-9 h-5 bg-border peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+                      </label>
+                    </div>
+
+                    <div className="flex items-center justify-between p-4 bg-sidebar/30 border border-border rounded-xl">
+                      <div>
+                        <div className="text-[11px] font-bold uppercase tracking-wider">Leave Voicemail</div>
+                        <div className="text-[10px] text-muted-foreground">Allows AI to leave a voicemail and end call on answering machines</div>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" name="leaveVoicemail" defaultChecked={agentSettings.tools_config?.leaveVoicemail ?? false} className="sr-only peer" />
+                        <div className="w-9 h-5 bg-border peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+                      </label>
+                    </div>
+
+                    <div className="flex items-center justify-between p-4 bg-primary/5 border border-primary/20 rounded-xl">
+                      <div>
+                        <div className="text-[11px] font-bold text-primary uppercase tracking-wider">Master Call Recording</div>
+                        <div className="text-[10px] text-muted-foreground font-medium">Record all call audio and save transcripts to AWS S3</div>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" name="record_calls" defaultChecked={agentSettings.record_calls !== false} className="sr-only peer" />
+                        <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-8 flex justify-end pt-4 border-t border-border">
+                  <button id="save-tools-btn" type="submit" className="bg-primary hover:bg-primary/90 text-white font-semibold px-8 py-3 rounded-lg text-sm shadow-lg shadow-primary/20 transition">Save Configuration</button>
                 </div>
               </form>
             </div>
