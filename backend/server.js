@@ -53,18 +53,34 @@ let finalDbUrl = 'https://qhqmljwexivhvxzfklum.supabase.co';
 let finalDbKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFocW1sandleGl2aHZ4emZrbHVtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ3OTM3MjMsImV4cCI6MjA5MDM2OTcyM30.nO_aKJkRRsDNSIWDLgmvos7LxISvenFz2Fwn-62BgLo';
 const supabase = createClient(finalDbUrl, finalDbKey);
 
-// --- AUTO-MIGRATE: Add campaign_goal column if not exists ---
+// --- AUTO-MIGRATE: Add campaign_goal, tools_config, record_calls columns if they don't exist ---
 (async () => {
     try {
-        // Try to select the column — if it fails, the column doesn't exist yet
-        const { error } = await supabase.from('agent_settings').select('campaign_goal').limit(1);
-        if (error && error.message && error.message.includes('campaign_goal')) {
-            // Column doesn't exist — use raw SQL via RPC if available
+        // 1. Check campaign_goal
+        const { error: errorGoal } = await supabase.from('agent_settings').select('campaign_goal').limit(1);
+        if (errorGoal && errorGoal.message && errorGoal.message.includes('campaign_goal')) {
             console.log('[Migration] campaign_goal column missing, attempting to add...');
             await supabase.rpc('exec_sql', { sql: 'ALTER TABLE agent_settings ADD COLUMN IF NOT EXISTS campaign_goal TEXT;' }).catch(() => {});
         }
-        console.log('[Migration] agent_settings.campaign_goal column: OK');
-    } catch(e) { /* migration non-fatal */ }
+        
+        // 2. Check tools_config
+        const { error: errorTools } = await supabase.from('agent_settings').select('tools_config').limit(1);
+        if (errorTools && errorTools.message && (errorTools.message.includes('tools_config') || errorTools.message.includes('column') || errorTools.code === 'PGRST204')) {
+            console.log('[Migration] tools_config column missing, attempting to add...');
+            await supabase.rpc('exec_sql', { sql: 'ALTER TABLE agent_settings ADD COLUMN IF NOT EXISTS tools_config JSONB DEFAULT \'{"hangUp": true, "transferCall": false, "queryCorpus": false, "leaveVoicemail": false, "playDtmfSounds": false}\'::jsonb;' }).catch(() => {});
+        }
+        
+        // 3. Check record_calls
+        const { error: errorRecord } = await supabase.from('agent_settings').select('record_calls').limit(1);
+        if (errorRecord && errorRecord.message && (errorRecord.message.includes('record_calls') || errorRecord.message.includes('column') || errorRecord.code === 'PGRST204')) {
+            console.log('[Migration] record_calls column missing, attempting to add...');
+            await supabase.rpc('exec_sql', { sql: 'ALTER TABLE agent_settings ADD COLUMN IF NOT EXISTS record_calls BOOLEAN DEFAULT true;' }).catch(() => {});
+        }
+        
+        console.log('[Migration] Column checks completed.');
+    } catch(e) { 
+        console.warn('[Migration] Auto-migration warning:', e.message); 
+    }
 })();
 // --- AWS S3 NOTIFICATION ENGINE ---
 async function getS3Client() {
@@ -1412,17 +1428,30 @@ app.post('/api/agent', async (req, res) => {
         if (req.body.record_calls !== undefined) updateData.record_calls = req.body.record_calls;
         if (campaign_goal !== undefined) updateData.campaign_goal = campaign_goal;
         
-        const { data: existing } = await supabase.from('agent_settings').select('id').eq('client_id', client_id).limit(1).maybeSingle();
+        const { data: existing, error: findErr } = await supabase.from('agent_settings').select('id').eq('client_id', client_id).limit(1).maybeSingle();
+        if (findErr) throw findErr;
         
+        let result;
         if (existing && existing.id) {
-            await supabase.from('agent_settings').update(updateData).eq('id', existing.id);
+            result = await supabase.from('agent_settings').update(updateData).eq('id', existing.id);
         } else {
-            await supabase.from('agent_settings').insert([updateData]);
+            result = await supabase.from('agent_settings').insert([updateData]);
+        }
+        
+        if (result.error) {
+            console.error("[Agent Update Error] Supabase details:", result.error);
+            if (result.error.message && (result.error.message.includes('tools_config') || result.error.message.includes('record_calls'))) {
+                return res.status(400).json({ 
+                    error: "Database columns 'tools_config' or 'record_calls' are missing. Please execute the migration file 'backend/migration_add_tools_config.sql' in your Supabase SQL Editor."
+                });
+            }
+            throw result.error;
         }
         
         res.json({ success: true, message: "Agent successfully updated!" });
     } catch (err) {
-        res.status(500).json({ error: "Could not save agent settings." });
+        console.error("Agent Update Catch Error:", err);
+        res.status(500).json({ error: err.message || "Could not save agent settings." });
     }
 });
 

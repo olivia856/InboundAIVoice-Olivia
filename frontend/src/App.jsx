@@ -1235,7 +1235,7 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
             </div>
             
             <div className="bg-card border border-border rounded-2xl p-6 shadow-premium-lg">
-              <form onSubmit={async (e) => {
+              <form key={JSON.stringify(agentSettings.tools_config) + agentSettings.record_calls} onSubmit={async (e) => {
                 e.preventDefault();
                 const btn = document.getElementById('save-tools-btn');
                 btn.innerText = 'Saving...';
@@ -1338,14 +1338,14 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                       </label>
                     </div>
 
-                    <div className="flex items-center justify-between p-4 bg-primary/5 border border-primary/20 rounded-xl">
+                    <div className="flex items-center justify-between p-4 bg-sidebar/30 border border-border rounded-xl">
                       <div>
-                        <div className="text-[11px] font-bold text-primary uppercase tracking-wider">Master Call Recording</div>
-                        <div className="text-[10px] text-muted-foreground font-medium">Record all call audio and save transcripts to AWS S3</div>
+                        <div className="text-[11px] font-bold uppercase tracking-wider">Master Call Recording</div>
+                        <div className="text-[10px] text-muted-foreground">Record all call audio and save transcripts</div>
                       </div>
                       <label className="relative inline-flex items-center cursor-pointer">
                         <input type="checkbox" name="record_calls" defaultChecked={agentSettings.record_calls !== false} className="sr-only peer" />
-                        <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                        <div className="w-9 h-5 bg-border peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
                       </label>
                     </div>
                   </div>
@@ -2194,14 +2194,14 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
               {viewSummaryModal.recording_url && (
                 <div className="pt-4 border-t border-border">
                   <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-3 flex items-center gap-2">
-                    <Mic size={14} className="text-primary" /> Call Recording (S3)
+                    <Mic size={14} className="text-primary" /> Call Recording
                   </h4>
                   <div className="bg-background/50 p-4 rounded-xl border border-border flex items-center gap-4">
                      <audio controls className="flex-1 h-10">
                         <source src={viewSummaryModal.recording_url && viewSummaryModal.recording_url.includes('api.twilio.com') ? `${API_BASE}/api/recordings/${viewSummaryModal.twilio_sid}` : viewSummaryModal.recording_url} type="audio/mpeg" />
                      </audio>
                   </div>
-                  <p className="text-[10px] text-muted-foreground mt-2 italic">Stored securely in {getIntegration('aws_s3').meta_data?.bucket || 'your S3 bucket'}.</p>
+                  <p className="text-[10px] text-muted-foreground mt-2 italic">Stored securely in cloud storage.</p>
                 </div>
               )}
             </div>
@@ -2321,14 +2321,14 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
       )}
 
       {manualLeadModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center fade-in p-4 text-white">
-          <div className="bg-card w-full max-w-lg rounded-3xl shadow-premium-lg border border-border flex flex-col p-8 fade-in-up">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center fade-in p-4">
+          <div className="bg-card w-full max-w-lg rounded-3xl shadow-premium-lg border border-border flex flex-col p-8 fade-in-up text-foreground">
             <div className="flex justify-between items-center mb-6">
               <div>
                 <h3 className="text-2xl font-black tracking-tight text-primary">Add CRM Target</h3>
                 <p className="text-xs text-muted-foreground mt-1">Populate your lead database manually with a new prospect.</p>
               </div>
-              <button onClick={() => setManualLeadModal(false)} className="text-muted-foreground hover:text-white bg-white/5 p-2 rounded-xl transition-all"><XCircle size={24}/></button>
+              <button onClick={() => setManualLeadModal(false)} className="text-muted-foreground hover:text-foreground bg-foreground/5 hover:bg-foreground/10 p-2 rounded-xl transition-all"><XCircle size={24}/></button>
             </div>
             <form onSubmit={saveManualLead} className="space-y-5">
               <div className="grid grid-cols-2 gap-4">
@@ -2339,7 +2339,7 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                     value={newLead.name}
                     onChange={(e)=>setNewLead({...newLead, name: e.target.value})}
                     placeholder="Full legal name" 
-                    className="w-full bg-sidebar/30 border border-border rounded-xl p-3.5 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all shadow-inner" 
+                    className="w-full bg-sidebar/30 border border-border rounded-xl p-3.5 text-sm text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all shadow-inner" 
                   />
                 </div>
                 <div className="space-y-1.5">
@@ -2349,7 +2349,7 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                     value={newLead.phone}
                     onChange={(e)=>setNewLead({...newLead, phone: e.target.value})}
                     placeholder="+91..." 
-                    className="w-full bg-sidebar/30 border border-border rounded-xl p-3.5 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all shadow-inner font-mono" 
+                    className="w-full bg-sidebar/30 border border-border rounded-xl p-3.5 text-sm text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all shadow-inner font-mono" 
                   />
                 </div>
               </div>
@@ -2359,7 +2359,7 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                   value={newLead.email}
                   onChange={(e)=>setNewLead({...newLead, email: e.target.value})}
                   placeholder="client@company.com" 
-                  className="w-full bg-sidebar/30 border border-border rounded-xl p-3.5 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all shadow-inner" 
+                  className="w-full bg-sidebar/30 border border-border rounded-xl p-3.5 text-sm text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all shadow-inner" 
                 />
               </div>
               <div className="space-y-1.5">
@@ -2367,12 +2367,12 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                 <select 
                   value={newLead.segment}
                   onChange={(e)=>setNewLead({...newLead, segment: e.target.value})}
-                  className="w-full bg-sidebar/30 border border-border rounded-xl p-3.5 text-sm outline-none focus:border-primary transition-all cursor-pointer"
+                  className="w-full bg-sidebar/30 border border-border rounded-xl p-3.5 text-sm text-foreground outline-none focus:border-primary transition-all cursor-pointer"
                 >
-                  <option value="Hot">🔥 Hot Lead</option>
-                  <option value="Warm">⚡ Warm Pipeline</option>
-                  <option value="Qualified">🎓 Qualified Pro</option>
-                  <option value="Cold">❄️ Cold Outreach</option>
+                  <option value="Hot" className="text-foreground bg-card">🔥 Hot Lead</option>
+                  <option value="Warm" className="text-foreground bg-card">⚡ Warm Pipeline</option>
+                  <option value="Qualified" className="text-foreground bg-card">🎓 Qualified Pro</option>
+                  <option value="Cold" className="text-foreground bg-card">❄️ Cold Outreach</option>
                 </select>
               </div>
               <div className="space-y-1.5">
@@ -2381,7 +2381,7 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                   value={newLead.ai_context}
                   onChange={(e)=>setNewLead({...newLead, ai_context: e.target.value})}
                   placeholder="e.g. Previous client looking to buy in Mumbai West..." 
-                  className="w-full bg-sidebar/30 border border-border rounded-xl p-3.5 text-sm outline-none focus:border-primary h-24 resize-none transition-all shadow-inner"
+                  className="w-full bg-sidebar/30 border border-border rounded-xl p-3.5 text-sm text-foreground outline-none focus:border-primary h-24 resize-none transition-all shadow-inner"
                 />
               </div>
               <button type="submit" className="w-full bg-primary hover:bg-primary/90 text-white font-black py-4 rounded-2xl shadow-xl shadow-primary/20 mt-4 transition-all transform hover:-translate-y-0.5 active:translate-y-0 text-sm uppercase tracking-widest">Deploy Manual Target</button>

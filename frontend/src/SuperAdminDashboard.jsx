@@ -706,13 +706,13 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
                   </div>
                 </div>
 
-                {/* Amazon S3 */}
+                {/* Cloud Storage */}
                 <div className="bg-white border border-[#e4e9f2] rounded-[14px] p-5 shadow-[0_1px_3px_rgba(15,23,42,0.06)]">
                   <div className="flex items-center gap-2 mb-4">
                     <div className="w-8 h-8 rounded bg-orange-100 flex items-center justify-center">
-                      <span className="text-orange-600 font-bold font-serif">S3</span>
+                      <span className="text-orange-600 font-bold font-serif">CS</span>
                     </div>
-                    <h3 className="text-sm font-bold">Amazon S3 (Call Recordings)</h3>
+                    <h3 className="text-sm font-bold">Cloud Storage (Call Recordings)</h3>
                     {platformKeys.s3_access_key && <span className="ml-auto text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">Connected</span>}
                   </div>
                   <div className="space-y-3">
