@@ -2390,7 +2390,7 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
         </div>
       )}
        <div className="p-8 mt-auto text-center text-xs text-muted-foreground border-t border-border/30">
-         © 2026 Azlon AI Platform • Dashboard Version V2.3
+         © 2026 Azlon AI Platform • Dashboard Version V2.8
        </div>
       </main>
     </div>
