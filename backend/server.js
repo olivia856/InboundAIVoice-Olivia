@@ -1082,6 +1082,7 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
         let leadName = reqName || "";
         let leadEmail = "";
         let leadSegment = "";
+        let initialMessage = undefined;
         if (clientId && toPhone) {
             try {
                 const cleanPhone = String(toPhone).replace(/\D/g, '');
@@ -1180,6 +1181,15 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
             }
             if (leadHistory) {
                 finalPrompt += `\n- Past interaction history:\n${leadHistory}\n\nINSTRUCTION: You have access to their past call summary/notes above. Use this context naturally to make the call feel highly personalized. For example, reference their previous interest, questions, or concerns if they are relevant to the campaign goal: "${reqGoal || ''}".`;
+                
+                // Force a personalized opening message for known outbound leads!
+                if (firstName) {
+                    initialMessage = `Hi ${firstName}, this is ${companyName} calling. I'm following up with you! How are you doing today?`;
+                } else {
+                    initialMessage = `Hi there, this is ${companyName} calling. I'm following up on our previous interaction. How are you doing today?`;
+                }
+            } else if (firstName) {
+                initialMessage = `Hi ${firstName}, this is ${companyName} calling. How are you doing today?`;
             }
         }
 
@@ -1379,6 +1389,7 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
                 voice: finalUltravoxVoice,
                 temperature: agentData?.temperature || 0.3,
                 firstSpeaker: "FIRST_SPEAKER_AGENT",
+                initialMessages: initialMessage ? [{ role: 'MESSAGE_ROLE_AGENT', text: initialMessage }] : undefined,
                 medium: { twilio: {} },
                 selectedTools: selectedTools,
                 inactivityMessages: [
