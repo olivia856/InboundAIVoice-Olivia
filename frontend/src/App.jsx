@@ -1541,11 +1541,14 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
         {activePage === 'leads' && (
           <div className="space-y-6 fade-in w-full">
             <div className="flex justify-between">
-              <div><h2 className="text-3xl font-extrabold tracking-tight">Lead Management</h2><p className="text-sm text-muted-foreground mt-1.5 font-medium">AI-enriched CRM specifically built for real estate tracking</p></div>
+              <div>
+                <h2 className="text-3xl font-extrabold tracking-tight">Lead Management</h2>
+                <p className="text-sm text-muted-foreground mt-1.5 font-medium">AI-enriched CRM — agent reads call history before every conversation</p>
+              </div>
             </div>
             
             <div className="grid grid-cols-4 gap-4 mb-6">
-              {[ {l: 'Hot Leads', v: leads.filter(x=>x.segment==='Hot').length, c: 'text-red-500'}, {l: 'Warm Pipelines', v: leads.filter(x=>x.segment==='Warm').length, c: 'text-orange-400'}, {l: 'Qualified', v: leads.filter(x=>x.segment==='Qualified').length, c: 'text-primary'}, {l: 'Cold Outreach', v: leads.filter(x=>x.segment==='Cold').length, c: 'text-blue-400'} ].map((m,i)=> (
+              {[ {l: 'Hot Leads', v: leads.filter(x=>x.segment==='Hot').length, c: 'text-red-500'}, {l: 'Warm Pipelines', v: leads.filter(x=>x.segment==='Warm').length, c: 'text-orange-400'}, {l: 'Qualified', v: leads.filter(x=>x.segment==='Qualified').length, c: 'text-primary'}, {l: 'Auto-captured', v: leads.filter(x=>x.segment==='Auto-captured').length, c: 'text-blue-400'} ].map((m,i)=> (
                 <div key={i} className="bg-card border border-border rounded-xl p-5 shadow flex flex-col items-center justify-center">
                   <div className={`text-3xl font-bold ${m.c}`}>{m.v}</div>
                   <div className="text-xs uppercase font-medium mt-1 text-muted-foreground tracking-wider">{m.l}</div>
@@ -1553,23 +1556,154 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
               ))}
             </div>
 
+            <div className="p-4 bg-gradient-to-r from-primary/5 to-purple-500/5 border border-primary/20 rounded-xl flex items-start gap-3">
+              <span className="text-xl">🧠</span>
+              <div>
+                <p className="text-xs font-bold text-primary">Caller Memory System Active</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Every time a call completes, the AI summary is saved here. On the next call from the same number, the AI reads this history and greets them by name with context — no generic greetings.</p>
+              </div>
+            </div>
+
             <div className="bg-card border border-border rounded-2xl shadow-premium-lg overflow-hidden">
               <div className="p-4 border-b border-border bg-sidebar/30 flex justify-between items-center">
-                 <h3 className="font-semibold text-sm">Lead Database</h3>
+                 <div>
+                   <h3 className="font-semibold text-sm">Lead Database</h3>
+                   <p className="text-xs text-muted-foreground mt-0.5">Auto-captured from calls. Click "View Memory" on any lead to see their full call history.</p>
+                 </div>
                  <button className="bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded-lg text-xs font-bold transition shadow-sm" onClick={()=>setManualLeadModal(true)}>+ Manual Lead</button>
               </div>
-              <table className="w-full text-left text-sm whitespace-nowrap">
-                <thead><tr className="border-b border-border"><th className="py-3 px-4 text-xs font-medium text-muted-foreground">Name</th><th className="py-3 px-4 text-xs font-medium text-muted-foreground">Phone</th><th className="py-3 px-4 text-xs font-medium text-muted-foreground">AI Context</th><th className="py-3 px-4 text-xs font-medium text-muted-foreground">Segment</th></tr></thead>
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-border bg-sidebar/20">
+                    <th className="py-3 px-4 text-xs font-medium text-muted-foreground">Name</th>
+                    <th className="py-3 px-4 text-xs font-medium text-muted-foreground">Phone</th>
+                    <th className="py-3 px-4 text-xs font-medium text-muted-foreground">AI Context & Memory</th>
+                    <th className="py-3 px-4 text-xs font-medium text-muted-foreground">Segment</th>
+                    <th className="py-3 px-4 text-xs font-medium text-muted-foreground text-right">Actions</th>
+                  </tr>
+                </thead>
                 <tbody>
-                  {leads.map((l, i) => (
-                    <tr key={i} className="border-b border-border/40 hover:bg-white/5 transition">
-                      <td className="py-3 px-4 font-medium">{l.name}</td>
-                      <td className="py-3 px-4 font-mono text-primary text-xs">{l.phone}</td>
-                      <td className="py-3 px-4 text-xs text-muted-foreground max-w-[200px] truncate">{l.ai_context || '—'}</td>
-                      <td className="py-3 px-4"><span className="bg-primary/20 text-primary px-2 py-0.5 rounded-full text-[10px] uppercase font-bold tracking-wider">{l.segment}</span></td>
-                    </tr>
-                  ))}
-                  {leads.length === 0 && <tr><td colSpan="4" className="text-center py-8 text-muted-foreground text-xs">No leads recorded. Complete an AI call first!</td></tr>}
+                  {leads.map((l, i) => {
+                    const historyLines = l.ai_context ? l.ai_context.trim().split('\n').filter(Boolean) : [];
+                    const callCount = historyLines.length;
+                    const isExpanded = expandedRecording === `lead-${l.id}`;
+                    return (
+                      <React.Fragment key={i}>
+                        <tr className={`border-b border-border/40 hover:bg-white/5 transition ${isExpanded ? 'bg-primary/5' : ''}`}>
+                          <td className="py-3 px-4 font-medium">
+                            {l.name || <span className="text-muted-foreground/50 italic text-xs">No name yet</span>}
+                          </td>
+                          <td className="py-3 px-4 font-mono text-primary text-xs">{l.phone}</td>
+                          <td className="py-3 px-4">
+                            {callCount > 0 ? (
+                              <button
+                                onClick={() => setExpandedRecording(isExpanded ? null : `lead-${l.id}`)}
+                                className="flex items-center gap-2 bg-primary/10 hover:bg-primary/20 text-primary px-3 py-1.5 rounded-full text-[11px] font-bold transition"
+                              >
+                                <span>🧠 {callCount} interaction{callCount !== 1 ? 's' : ''}</span>
+                                <span className="text-[9px] opacity-60">{isExpanded ? '▲' : '▼'}</span>
+                              </button>
+                            ) : (
+                              <span className="text-muted-foreground/40 text-xs italic">No history yet</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className={cn("px-2 py-0.5 rounded-full text-[10px] uppercase font-bold tracking-wider",
+                              l.segment === 'Hot' ? 'bg-red-500/15 text-red-400' :
+                              l.segment === 'Warm' ? 'bg-orange-500/15 text-orange-400' :
+                              l.segment === 'Auto-captured' ? 'bg-blue-500/15 text-blue-400' :
+                              'bg-primary/20 text-primary'
+                            )}>{l.segment || 'Unknown'}</span>
+                          </td>
+                          <td className="py-3 px-4 text-right">
+                            <button
+                              onClick={() => setExpandedRecording(isExpanded ? null : `lead-${l.id}`)}
+                              className="text-xs text-muted-foreground hover:text-primary transition px-2 py-1 rounded border border-border hover:border-primary/30 font-semibold"
+                            >
+                              {isExpanded ? 'Hide Memory' : 'View Memory'}
+                            </button>
+                          </td>
+                        </tr>
+                        {isExpanded && (
+                          <tr className="bg-sidebar/5 border-b border-border/30">
+                            <td colSpan="5" className="px-6 py-5 whitespace-normal">
+                              <div className="space-y-4">
+                                <div className="flex items-center gap-2 mb-3">
+                                  <span className="text-sm font-bold">🧠 Call Memory & AI Context</span>
+                                  <span className="text-[10px] text-muted-foreground bg-muted/30 px-2 py-0.5 rounded-full">
+                                    The AI reads this before every call with {l.name || 'this caller'}
+                                  </span>
+                                </div>
+                                {historyLines.length > 0 ? (
+                                  <div className="space-y-2">
+                                    {historyLines.map((line, li) => {
+                                      const dateMatch = line.match(/^\[([^\]]+)\]/);
+                                      const dateLabel = dateMatch ? dateMatch[1] : null;
+                                      const content = dateLabel ? line.replace(`[${dateLabel}]`, '').replace(/^:\s*/, '').trim() : line;
+                                      const isInbound = dateLabel?.toLowerCase().includes('inbound');
+                                      const isOutbound = dateLabel?.toLowerCase().includes('outbound');
+                                      return (
+                                        <div key={li} className="flex gap-3 p-3 rounded-xl bg-background border border-border/50">
+                                          <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${isInbound ? 'bg-emerald-400' : isOutbound ? 'bg-blue-400' : 'bg-muted-foreground'}`} />
+                                          <div className="flex-1 min-w-0">
+                                            {dateLabel && (
+                                              <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full mr-2 ${isInbound ? 'bg-emerald-500/10 text-emerald-400' : isOutbound ? 'bg-blue-500/10 text-blue-400' : 'bg-muted/30 text-muted-foreground'}`}>
+                                                {dateLabel}
+                                              </span>
+                                            )}
+                                            <p className="text-xs text-foreground/80 mt-1 leading-relaxed">{content}</p>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                ) : (
+                                  <p className="text-xs text-muted-foreground italic">No call history recorded yet.</p>
+                                )}
+                                <div className="mt-4 pt-3 border-t border-border/50">
+                                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2 block">✏️ Add / Edit Agent Notes (AI will read this next call)</label>
+                                  <div className="flex gap-3">
+                                    <textarea
+                                      defaultValue={l.ai_context || ''}
+                                      id={`ctx-edit-${l.id}`}
+                                      rows={3}
+                                      placeholder="Add custom notes for the AI — e.g. 'Looking for 3 BHK in South Mumbai, budget 2Cr, prefers evening calls'"
+                                      className="flex-1 bg-background border border-border rounded-xl p-3 text-xs font-mono outline-none focus:border-primary transition resize-none"
+                                    />
+                                    <button
+                                      onClick={async () => {
+                                        const newCtx = document.getElementById(`ctx-edit-${l.id}`)?.value || '';
+                                        try {
+                                          const res = await fetch(`${API_BASE}/api/leads/${l.id}`, {
+                                            method: 'PATCH',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({ ai_context: newCtx })
+                                          });
+                                          const d = await res.json();
+                                          if (d.success) { showToast('AI notes updated!', 'success'); fetchAll(); }
+                                          else showToast('Failed to save', 'error');
+                                        } catch(e) { showToast('Save failed', 'error'); }
+                                      }}
+                                      className="bg-primary text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-primary/90 transition self-end whitespace-nowrap"
+                                    >
+                                      Save Notes
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
+                  {leads.length === 0 && <tr><td colSpan="5" className="text-center py-12 text-muted-foreground text-xs">
+                    <div className="flex flex-col items-center gap-2">
+                      <span className="text-2xl">🧠</span>
+                      <p className="font-semibold">No leads yet</p>
+                      <p>After your first AI call completes, callers will automatically appear here with their call history.</p>
+                    </div>
+                  </td></tr>}
                 </tbody>
               </table>
             </div>
@@ -2390,7 +2524,7 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
         </div>
       )}
        <div className="p-8 mt-auto text-center text-xs text-muted-foreground border-t border-border/30">
-         © 2026 Azlon AI Platform • Dashboard Version V2.8
+         © 2026 Azlon AI Platform • Dashboard Version V2.9
        </div>
       </main>
     </div>

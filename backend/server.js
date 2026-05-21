@@ -18,12 +18,12 @@ app.use(cors());
 
 // Friendly greeting for the root URL so the browser doesn't show an error
 app.get('/', (req, res) => {
-    res.send('✅ Azlon AI Backend is Live & Running! [v2.8 - destination-number-fix]');
+    res.send('✅ Azlon AI Backend is Live & Running! [v2.9 - caller-memory]');
 });
 
 // Version endpoint for deployment verification
 app.get('/api/version', (req, res) => {
-    res.json({ version: '2.8', build: 'destination-number-fix', timestamp: new Date().toISOString() });
+    res.json({ version: '2.9', build: 'caller-memory', timestamp: new Date().toISOString() });
 });
 
 // Inbound Webhook URL for clients to paste in Twilio
@@ -500,26 +500,120 @@ app.post('/api/twilio/inbound', async (req, res) => {
         let finalPrompt = agentData?.system_prompt || fallbackPrompt;
         let initialMessage = undefined;
 
-        // 2.2 Inbound Caller ID Context Injection
+        // 2.2 CALLER MEMORY SYSTEM — 3-Layer Contextual Recognition
         if (clientId && From) {
             try {
                 const cleanCaller = String(From).replace(/\D/g, '');
                 if (cleanCaller.length >= 10) {
+                    const callerSuffix = cleanCaller.slice(-10);
+
+                    // === LAYER 1: Check leads table (primary CRM source) ===
                     const { data: leadMatch } = await supabase.from('leads')
-                        .select('name, ai_context')
+                        .select('id, name, ai_context, segment, email')
                         .eq('client_id', clientId)
-                        .ilike('phone', `%${cleanCaller.slice(-10)}%`)
+                        .ilike('phone', `%${callerSuffix}%`)
                         .maybeSingle();
-                    
+
                     if (leadMatch && leadMatch.name) {
-                        console.log(`[Twilio Inbound] Caller ID Match Found: ${leadMatch.name}`);
-                        const ctx = leadMatch.ai_context ? `Their previous interaction/notes: "${leadMatch.ai_context}". ` : '';
-                        finalPrompt += `\n\n[CALLER CONTEXT]: The caller's phone number matched an existing lead in your CRM named "${leadMatch.name}". ${ctx}Greet them by name immediately (e.g. "Hi ${leadMatch.name.split(' ')[0]}, thanks for calling back!").`;
-                        initialMessage = `Hi ${leadMatch.name.split(' ')[0]}, thanks for calling back! How can I help you today?`;
+                        // Known lead — build rich contextual greeting
+                        console.log(`[CallerMemory] Layer 1 Match: Lead "${leadMatch.name}" (${From})`);
+                        const firstName = leadMatch.name.split(' ')[0];
+                        const hasHistory = !!(leadMatch.ai_context && leadMatch.ai_context.trim());
+
+                        // Detect if this is an outbound callback (they missed our call and are calling back)
+                        const recentOutbound = hasHistory && 
+                            (leadMatch.ai_context.toLowerCase().includes('outbound') || 
+                             leadMatch.ai_context.toLowerCase().includes('voicemail') ||
+                             leadMatch.ai_context.toLowerCase().includes('no answer') ||
+                             leadMatch.ai_context.toLowerCase().includes('tried reaching'));
+
+                        // Build the smart opening message
+                        let smartOpening;
+                        if (recentOutbound) {
+                            smartOpening = `Hi ${firstName}! I'm glad you called back. `;
+                        } else if (hasHistory) {
+                            smartOpening = `Hi ${firstName}, welcome back! `;
+                        } else {
+                            smartOpening = `Hi ${firstName}, great to hear from you! `;
+                        }
+
+                        // Extract the most recent call topic from ai_context for the greeting
+                        let lastTopic = '';
+                        if (hasHistory) {
+                            const lines = leadMatch.ai_context.trim().split('\n');
+                            const lastLine = lines[lines.length - 1] || '';
+                            // Extract brief topic — take text after ]: if it exists
+                            const topicMatch = lastLine.match(/\]:\s*(.{10,80})/);
+                            if (topicMatch) {
+                                const rawTopic = topicMatch[1].trim();
+                                // Truncate at a word boundary around 60 chars
+                                lastTopic = rawTopic.length > 60 
+                                    ? rawTopic.substring(0, rawTopic.lastIndexOf(' ', 60)) + '...'
+                                    : rawTopic;
+                            }
+                        }
+
+                        // Build the full context prompt for the AI
+                        const ctxBlock = hasHistory 
+                            ? `Their previous interaction history:\n${leadMatch.ai_context}\n`
+                            : 'This is their first recorded call. ';
+                        
+                        const segmentNote = leadMatch.segment ? `Their segment/category is: ${leadMatch.segment}. ` : '';
+
+                        finalPrompt += `\n\n[CALLER MEMORY — KNOWN LEAD]:\nThe caller's phone number matched an existing lead named "${leadMatch.name}"${leadMatch.email ? ` (email: ${leadMatch.email})` : ''}. ${segmentNote}\n${ctxBlock}\nINSTRUCTION: Greet them personally by their first name "${firstName}" immediately. ${lastTopic ? `Reference their previous topic if relevant: "${lastTopic}".` : ''} Never ask for their name — you already know it. Be warm and pick up naturally from where you left off.`;
+
+                        initialMessage = smartOpening + 'How can I help you today?';
+                        console.log(`[CallerMemory] Smart opening: "${initialMessage}"`);
+
+                    } else {
+                        // === LAYER 2: Not in leads — check call history by phone number ===
+                        console.log(`[CallerMemory] Layer 1 miss. Checking call history for ${From}...`);
+                        const { data: pastCalls } = await supabase.from('calls')
+                            .select('id, direction, ai_summary, sentiment_category, created_at, caller_name')
+                            .eq('client_id', clientId)
+                            .or(`from_phone.ilike.%${callerSuffix}%,to_phone.ilike.%${callerSuffix}%`)
+                            .order('created_at', { ascending: false })
+                            .limit(3);
+
+                        if (pastCalls && pastCalls.length > 0) {
+                            console.log(`[CallerMemory] Layer 2 Match: Found ${pastCalls.length} past call(s) for ${From}`);
+                            
+                            // Check if their last interaction was an outbound call they missed (callback scenario)
+                            const lastCall = pastCalls[0];
+                            const isCallback = lastCall.direction === 'outbound';
+                            const knownName = pastCalls.find(c => c.caller_name)?.caller_name || null;
+                            const firstName2 = knownName ? knownName.split(' ')[0] : null;
+
+                            // Build history summary for prompt
+                            const historySummary = pastCalls
+                                .map(c => {
+                                    const dateStr = new Date(c.created_at).toLocaleDateString('en-IN');
+                                    const dir = c.direction === 'inbound' ? 'Inbound call' : 'Outbound call';
+                                    return `[${dateStr} - ${dir}]: ${c.ai_summary || 'No summary available.'}` ;
+                                })
+                                .join('\n');
+
+                            if (isCallback && firstName2) {
+                                finalPrompt += `\n\n[CALLER MEMORY — CALLBACK DETECTED]:\nThis caller (${From}) previously received an outbound call from us. They may be calling back about that interaction. Their name is "${knownName}".\n\nPrevious call history:\n${historySummary}\n\nINSTRUCTION: Greet them as ${firstName2} and reference that we tried reaching them: e.g. "Hi ${firstName2}, I'm glad you called back! I had tried reaching you earlier..."  Ask how you can help them.`;
+                                initialMessage = `Hi ${firstName2}, glad you called back! How can I help you?`;
+                            } else if (firstName2) {
+                                finalPrompt += `\n\n[CALLER MEMORY — RETURNING CALLER]:\nThis caller (${From}) has called before. Their name from records is "${knownName}".\n\nPrevious call history:\n${historySummary}\n\nINSTRUCTION: Greet them warmly as ${firstName2}. Never ask for their name again.`;
+                                initialMessage = `Hi ${firstName2}, welcome back! How can I help you today?`;
+                            } else {
+                                finalPrompt += `\n\n[CALLER MEMORY — RETURNING CALLER (NAME UNKNOWN)]:\nThis phone number (${From}) has called before but we don't have their name recorded.\n\nPrevious call history:\n${historySummary}\n\nINSTRUCTION: Greet them warmly, organically collect their name early in the conversation.`;
+                            }
+                            console.log(`[CallerMemory] Layer 2 opening: "${initialMessage || 'generic'}"`);
+
+                        } else {
+                            // === LAYER 3: Brand new caller — no history at all ===
+                            console.log(`[CallerMemory] Layer 3: New caller ${From}. Will auto-create lead after call.`);
+                            // No special context — AI will use default greeting and collect their name
+                            // Auto-lead creation happens in the call completion webhook
+                        }
                     }
                 }
             } catch (e) {
-                console.error("[Twilio Inbound] Lead lookup error:", e.message);
+                console.error("[CallerMemory] Lookup error:", e.message);
             }
         }
         
@@ -1506,7 +1600,7 @@ app.post('/api/twilio/status/:client_id?', async (req, res) => {
         setTimeout(async () => {
             try {
                 // Find mapping row
-                const { data: callRow } = await supabase.from('calls').select('ultravox_call_id, client_id').eq('twilio_sid', callSid).single();
+                const { data: callRow } = await supabase.from('calls').select('ultravox_call_id, client_id, direction, from_phone, to_phone').eq('twilio_sid', callSid).single();
                 if (!callRow || !callRow.ultravox_call_id) return;
 
                 // Fetch Key (Priority: Client -> Platform -> Env)
@@ -1599,30 +1693,50 @@ app.post('/api/twilio/status/:client_id?', async (req, res) => {
                         }).eq('id', callRow.client_id);
                     }
 
-                    // --- INJECT CALL SUMMARY INTO LEAD'S AI_CONTEXT ---
+                    // --- CALLER MEMORY: INJECT CALL SUMMARY INTO LEAD'S AI_CONTEXT ---
                     try {
                         const leadPhone = callRow.direction === 'inbound' ? callRow.from_phone : callRow.to_phone;
-                        if (leadPhone) {
+                        if (leadPhone && callRow.client_id) {
                             const cleanPhone = String(leadPhone).replace(/\D/g, '');
                             if (cleanPhone.length >= 10) {
+                                const phoneSuffix = cleanPhone.slice(-10);
+                                const dateStr = new Date().toISOString().split('T')[0];
+                                const dirLabel = callRow.direction === 'inbound' ? 'Inbound' : 'Outbound';
+                                const newSummaryEntry = `[${dateStr} - ${dirLabel}]: ${summary}`;
+
                                 const { data: leadMatch } = await supabase.from('leads')
-                                    .select('id, ai_context')
+                                    .select('id, name, ai_context')
                                     .eq('client_id', callRow.client_id)
-                                    .ilike('phone', `%${cleanPhone.slice(-10)}%`)
+                                    .ilike('phone', `%${phoneSuffix}%`)
                                     .maybeSingle();
                                     
                                 if (leadMatch) {
-                                    const dateStr = new Date().toISOString().split('T')[0];
+                                    // KNOWN LEAD — append summary to existing context
                                     const newContext = leadMatch.ai_context 
-                                        ? `${leadMatch.ai_context}\n[${dateStr} Call Summary]: ${summary}`
-                                        : `[${dateStr} Call Summary]: ${summary}`;
+                                        ? `${leadMatch.ai_context}\n${newSummaryEntry}`
+                                        : newSummaryEntry;
                                     await supabase.from('leads').update({ ai_context: newContext }).eq('id', leadMatch.id);
-                                    console.log(`[Twilio Status] Successfully appended summary to Lead ID: ${leadMatch.id}`);
+                                    console.log(`[CallerMemory] Appended summary to Lead ID: ${leadMatch.id} ("${leadMatch.name}")`);
+                                } else {
+                                    // UNKNOWN CALLER — auto-create a lead entry so they're recognised next time
+                                    console.log(`[CallerMemory] New caller ${leadPhone} — auto-creating lead entry...`);
+                                    const { data: newLead, error: leadErr } = await supabase.from('leads').insert([{
+                                        phone: leadPhone,
+                                        client_id: callRow.client_id,
+                                        source: callRow.direction === 'inbound' ? 'Inbound Call' : 'Outbound Call',
+                                        ai_context: newSummaryEntry,
+                                        segment: 'Auto-captured'
+                                    }]).select();
+                                    if (leadErr) {
+                                        console.error(`[CallerMemory] Failed to auto-create lead:`, leadErr.message);
+                                    } else {
+                                        console.log(`[CallerMemory] Auto-created lead for ${leadPhone}, ID: ${newLead?.[0]?.id}`);
+                                    }
                                 }
                             }
                         }
                     } catch (err) {
-                        console.error("[Twilio Status] Failed to update lead ai_context:", err);
+                        console.error("[CallerMemory] Failed to update/create lead ai_context:", err);
                     }
                 }
 
@@ -2156,6 +2270,24 @@ app.post('/api/leads', async (req, res) => {
         const { name, phone, email, ai_context, segment, source, client_id } = req.body;
         const { data } = await supabase.from('leads').insert([{ name, phone, email, ai_context, segment, source, client_id }]).select();
         res.json({ success: true, lead: data[0] });
+    } catch(err) { res.status(500).json({ error: "API Failure" }); }
+});
+
+app.patch('/api/leads/:id', async (req, res) => {
+    try {
+        const { name, phone, email, ai_context, segment } = req.body;
+        const updateData = {};
+        if (name !== undefined) updateData.name = name;
+        if (phone !== undefined) updateData.phone = phone;
+        if (email !== undefined) updateData.email = email;
+        if (ai_context !== undefined) updateData.ai_context = ai_context;
+        if (segment !== undefined) updateData.segment = segment;
+
+        const { data, error } = await supabase.from('leads').update(updateData).eq('id', req.params.id).select();
+        if (error) {
+            return res.status(400).json({ success: false, error: error.message });
+        }
+        res.json({ success: true, lead: data?.[0] });
     } catch(err) { res.status(500).json({ error: "API Failure" }); }
 });
 
