@@ -18,12 +18,12 @@ app.use(cors());
 
 // Friendly greeting for the root URL so the browser doesn't show an error
 app.get('/', (req, res) => {
-    res.send('✅ Azlon AI Backend is Live & Running! [v2.7 - static-body-params]');
+    res.send('✅ Azlon AI Backend is Live & Running! [v2.8 - destination-number-fix]');
 });
 
 // Version endpoint for deployment verification
 app.get('/api/version', (req, res) => {
-    res.json({ version: '2.6', build: 'multi-tenant-fixes', timestamp: new Date().toISOString() });
+    res.json({ version: '2.8', build: 'destination-number-fix', timestamp: new Date().toISOString() });
 });
 
 // Inbound Webhook URL for clients to paste in Twilio
@@ -2042,7 +2042,7 @@ app.post('/api/tools/transfer', async (req, res) => {
                 {
                     toolName: "coldTransfer",
                     parameterOverrides: {
-                        target: `tel:${cleanTransferNumber}`
+                        destinationNumber: cleanTransferNumber
                     }
                 }
             ],
