@@ -1077,6 +1077,62 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
             contextText = "\n\nCOMPANY KNOWLEDGE BASE (Use this to answer questions):\n" + kbDocs.map(k => k.content).join("\n---\n");
         }
 
+        // 1.6 CALLER MEMORY SYSTEM for Outbound
+        let leadHistory = "";
+        let leadName = reqName || "";
+        let leadEmail = "";
+        let leadSegment = "";
+        if (clientId && toPhone) {
+            try {
+                const cleanPhone = String(toPhone).replace(/\D/g, '');
+                if (cleanPhone.length >= 10) {
+                    const phoneSuffix = cleanPhone.slice(-10);
+                    // Layer 1: Check leads table
+                    const { data: leadMatch } = await supabase.from('leads')
+                        .select('name, ai_context, segment, email')
+                        .eq('client_id', clientId)
+                        .ilike('phone', `%${phoneSuffix}%`)
+                        .maybeSingle();
+
+                    if (leadMatch) {
+                        console.log(`[Twilio Outbound CallerMemory] Match: Lead "${leadMatch.name}" (${toPhone})`);
+                        if (leadMatch.name && !leadName) {
+                            leadName = leadMatch.name;
+                        }
+                        if (leadMatch.ai_context && leadMatch.ai_context.trim()) {
+                            leadHistory = leadMatch.ai_context.trim();
+                        }
+                        leadEmail = leadMatch.email || "";
+                        leadSegment = leadMatch.segment || "";
+                    } else {
+                        // Layer 2: Check calls table (fallback)
+                        console.log(`[Twilio Outbound CallerMemory] Checking calls table for ${toPhone}...`);
+                        const { data: pastCalls } = await supabase.from('calls')
+                            .select('ai_summary, created_at, caller_name')
+                            .eq('client_id', clientId)
+                            .or(`from_phone.ilike.%${phoneSuffix}%,to_phone.ilike.%${phoneSuffix}%`)
+                            .order('created_at', { ascending: false })
+                            .limit(3);
+
+                        if (pastCalls && pastCalls.length > 0) {
+                            const knownName = pastCalls.find(c => c.caller_name)?.caller_name || null;
+                            if (knownName && !leadName) {
+                                leadName = knownName;
+                            }
+                            leadHistory = pastCalls
+                                .map(c => {
+                                    const dateStr = new Date(c.created_at).toLocaleDateString('en-IN');
+                                    return `[${dateStr} Call]: ${c.ai_summary || 'No summary available.'}`;
+                                })
+                                .join('\n');
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error("[Twilio Outbound CallerMemory] Lookup error:", e.message);
+            }
+        }
+
         // --- AMD (Answering Machine Detection) VOICEMAIL LOGIC ---
         const answeredBy = req.body.AnsweredBy || '';
         let amdPrompt = "";
@@ -1108,10 +1164,23 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
         if (agentData?.personality) finalPrompt += `\n\nYour Personality/Tone: ${agentData.personality}`;
         if (reqGoal) finalPrompt += `\n\n[PRIMARY MISSION GOAL]: ${reqGoal}`;
         
-        if (reqName) {
-            finalPrompt += `\n\n[CRITICAL OUTBOUND CONTEXT]: You are initiating an outbound call to a designated lead. The lead's name is ${reqName} and their phone number is ${toPhone}. 
-            - IMPORTANT: You already know their name and phone number. DO NOT ask them for their name or their phone number. 
-            - IMPORTANT: Greet them naturally by their first name as soon as they answer (e.g., "Hi ${reqName}, how are you?").`;
+        const resolvedName = leadName || reqName || "";
+        if (resolvedName || toPhone) {
+            const firstName = resolvedName ? resolvedName.split(' ')[0] : "";
+            finalPrompt += `\n\n[CRITICAL OUTBOUND CONTEXT]: You are initiating an outbound call to a designated lead.`;
+            if (resolvedName) {
+                finalPrompt += `\n- The lead's name is "${resolvedName}". Greet them naturally by their first name "${firstName}" as soon as they answer (e.g., "Hi ${firstName}, how are you?"). DO NOT ask them for their name.`;
+            }
+            finalPrompt += `\n- Phone number is: ${toPhone}. DO NOT ask for their phone number.`;
+            if (leadEmail) {
+                finalPrompt += `\n- Email address is: ${leadEmail}. DO NOT ask for their email unless updating it.`;
+            }
+            if (leadSegment) {
+                finalPrompt += `\n- Lead Category/Segment: ${leadSegment}.`;
+            }
+            if (leadHistory) {
+                finalPrompt += `\n- Past interaction history:\n${leadHistory}\n\nINSTRUCTION: You have access to their past call summary/notes above. Use this context naturally to make the call feel highly personalized. For example, reference their previous interest, questions, or concerns if they are relevant to the campaign goal: "${reqGoal || ''}".`;
+            }
         }
 
         finalPrompt += "\n\nULTRA-IMPORTANT - CALL TERMINATION: As soon as you say a FINAL goodbye or the lead says goodbye, you MUST call 'hang_up' IMMEDIATELY. Never wait for them to hang up. This is critical to reduce telephony costs.";
