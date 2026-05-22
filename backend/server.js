@@ -501,18 +501,19 @@ app.post('/api/twilio/inbound', async (req, res) => {
         let initialMessage = undefined;
 
         // 2.2 CALLER MEMORY SYSTEM — 3-Layer Contextual Recognition
-        if (clientId && From) {
+        if (From) {
             try {
                 const cleanCaller = String(From).replace(/\D/g, '');
                 if (cleanCaller.length >= 10) {
                     const callerSuffix = cleanCaller.slice(-10);
 
                     // === LAYER 1: Check leads table (primary CRM source) ===
-                    const { data: leadMatch } = await supabase.from('leads')
-                        .select('id, name, ai_context, segment, email')
-                        .eq('client_id', clientId)
-                        .ilike('phone', `%${callerSuffix}%`)
-                        .maybeSingle();
+                    let leadQuery = supabase.from('leads').select('id, name, ai_context, segment, email').ilike('phone', `%${callerSuffix}%`);
+                    if (clientId && clientId !== 'undefined' && clientId !== 'null') {
+                        leadQuery = leadQuery.eq('client_id', clientId);
+                    }
+                    const { data: leadMatches } = await leadQuery.limit(1);
+                    const leadMatch = leadMatches && leadMatches.length > 0 ? leadMatches[0] : null;
 
                     if (leadMatch && leadMatch.name) {
                         // Known lead — build rich contextual greeting
@@ -1083,17 +1084,18 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
         let leadEmail = "";
         let leadSegment = "";
         let initialMessage = undefined;
-        if (clientId && toPhone) {
+        if (toPhone) {
             try {
                 const cleanPhone = String(toPhone).replace(/\D/g, '');
                 if (cleanPhone.length >= 10) {
                     const phoneSuffix = cleanPhone.slice(-10);
                     // Layer 1: Check leads table
-                    const { data: leadMatch } = await supabase.from('leads')
-                        .select('name, ai_context, segment, email')
-                        .eq('client_id', clientId)
-                        .ilike('phone', `%${phoneSuffix}%`)
-                        .maybeSingle();
+                    let leadQuery = supabase.from('leads').select('name, ai_context, segment, email').ilike('phone', `%${phoneSuffix}%`);
+                    if (clientId && clientId !== 'undefined' && clientId !== 'null') {
+                        leadQuery = leadQuery.eq('client_id', clientId);
+                    }
+                    const { data: leadMatches } = await leadQuery.limit(1);
+                    const leadMatch = leadMatches && leadMatches.length > 0 ? leadMatches[0] : null;
 
                     if (leadMatch) {
                         console.log(`[Twilio Outbound CallerMemory] Match: Lead "${leadMatch.name}" (${toPhone})`);
