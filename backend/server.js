@@ -1505,7 +1505,6 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
         const ultravoxCallId = uvData.callId;
 
         // 3. Connect the Ultravox ID back to the original call
-        const callSid = req.body.CallSid;
         if (callSid) {
             await supabase.from('calls').update({ ultravox_call_id: ultravoxCallId }).eq('twilio_sid', callSid);
         }
