@@ -908,22 +908,33 @@ app.post('/api/twilio/inbound', async (req, res) => {
             }
         }
 
-        const uvResponse = await fetch('https://api.ultravox.ai/api/calls', {
+        let ultravoxUrl = 'https://api.ultravox.ai/api/calls';
+        let uvPayloadConfig = {
+            systemPrompt: finalPrompt,
+            voice: finalUltravoxVoice,
+            temperature: agentData?.temperature || 0.3,
+            firstSpeaker: "FIRST_SPEAKER_AGENT",
+            initialMessages: initialMessage ? [{ role: 'MESSAGE_ROLE_AGENT', text: initialMessage }] : undefined,
+            medium: { twilio: {} },
+            selectedTools: selectedTools,
+            inactivityMessages: [
+                { duration: '20s', message: "Are you still there? I haven't heard from you." }
+            ],
+            maxDuration: '1800s'
+        };
+
+        if (agentData?.ultravox_agent_id && agentData.ultravox_agent_id.trim() !== '') {
+            ultravoxUrl = `https://api.ultravox.ai/api/agents/${agentData.ultravox_agent_id.trim()}/calls`;
+            delete uvPayloadConfig.systemPrompt;
+            delete uvPayloadConfig.voice;
+            delete uvPayloadConfig.temperature;
+            delete uvPayloadConfig.selectedTools;
+        }
+
+        const uvResponse = await fetch(ultravoxUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-API-Key': ACTIVE_ULTRAVOX_KEY },
-            body: JSON.stringify({
-                systemPrompt: finalPrompt,
-                voice: finalUltravoxVoice,
-                temperature: agentData?.temperature || 0.3,
-                firstSpeaker: "FIRST_SPEAKER_AGENT",
-                initialMessages: initialMessage ? [{ role: 'MESSAGE_ROLE_AGENT', text: initialMessage }] : undefined,
-                medium: { twilio: {} },
-                selectedTools: selectedTools,
-                inactivityMessages: [
-                    { duration: '20s', message: "Are you still there? I haven't heard from you." }
-                ],
-                maxDuration: '1800s'
-            })
+            body: JSON.stringify(uvPayloadConfig)
         });
 
         const uvData = await uvResponse.json();
@@ -1486,25 +1497,36 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
             }
         }
 
-        const uvResponse = await fetch('https://api.ultravox.ai/api/calls', {
+        let ultravoxUrl = 'https://api.ultravox.ai/api/calls';
+        let uvPayloadConfig = {
+            systemPrompt: finalPrompt,
+            voice: finalUltravoxVoice,
+            temperature: agentData?.temperature || 0.3,
+            firstSpeaker: "FIRST_SPEAKER_AGENT",
+            initialMessages: initialMessage ? [{ role: 'MESSAGE_ROLE_AGENT', text: initialMessage }] : undefined,
+            medium: { twilio: {} },
+            selectedTools: selectedTools,
+            inactivityMessages: [
+                { duration: '20s', message: "Are you still there?" }
+            ],
+            maxDuration: '1800s'
+        };
+
+        if (agentData?.ultravox_agent_id && agentData.ultravox_agent_id.trim() !== '') {
+            ultravoxUrl = `https://api.ultravox.ai/api/agents/${agentData.ultravox_agent_id.trim()}/calls`;
+            delete uvPayloadConfig.systemPrompt;
+            delete uvPayloadConfig.voice;
+            delete uvPayloadConfig.temperature;
+            delete uvPayloadConfig.selectedTools;
+        }
+
+        const uvResponse = await fetch(ultravoxUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'X-API-Key': ACTIVE_ULTRAVOX_KEY
             },
-            body: JSON.stringify({
-                systemPrompt: finalPrompt,
-                voice: finalUltravoxVoice,
-                temperature: agentData?.temperature || 0.3,
-                firstSpeaker: "FIRST_SPEAKER_AGENT",
-                initialMessages: initialMessage ? [{ role: 'MESSAGE_ROLE_AGENT', text: initialMessage }] : undefined,
-                medium: { twilio: {} },
-                selectedTools: selectedTools,
-                inactivityMessages: [
-                    { duration: '20s', message: "Are you still there?" }
-                ],
-                maxDuration: '1800s'
-            })
+            body: JSON.stringify(uvPayloadConfig)
         });
 
         const uvData = await uvResponse.json();
@@ -1718,13 +1740,13 @@ app.post('/api/agent', async (req, res) => {
             client_id, system_prompt, voice_preset, temperature, 
             personality, greeting_message,
             working_days, open_time, close_time, non_working_dates,
-            tools_config, campaign_goal
+            tools_config, campaign_goal, ultravox_agent_id
         } = req.body;
         
         const updateData = {
             client_id, system_prompt, voice_preset, temperature, 
             personality, greeting_message, working_days, open_time, 
-            close_time, non_working_dates, tools_config
+            close_time, non_working_dates, tools_config, ultravox_agent_id
         };
         
         if (req.body.record_calls !== undefined) updateData.record_calls = req.body.record_calls;

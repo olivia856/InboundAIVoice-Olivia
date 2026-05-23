@@ -221,7 +221,7 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
   const [campaigns, setCampaigns] = useState([]);
   const [reports, setReports] = useState(null);
   
-  const [agentSettings, setAgentSettings] = useState({ system_prompt: '', voice_preset: 'Mark', temperature: 0.3, greeting_message: '', personality: 'professional' });
+  const [agentSettings, setAgentSettings] = useState({ system_prompt: '', voice_preset: 'Mark', temperature: 0.3, greeting_message: '', personality: 'professional', ultravox_agent_id: '' });
   const [integrations, setIntegrations] = useState([]);
   const [appointments, setAppointments] = useState([]);
   const [calendarDate, setCalendarDate] = useState(new Date());
@@ -1154,7 +1154,8 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                       leaveVoicemail: false,
                       playDtmfSounds: false
                     },
-                    record_calls: agentSettings.record_calls !== false
+                    record_calls: agentSettings.record_calls !== false,
+                    ultravox_agent_id: e.target.ultravox_agent_id.value
                   };
                   const res = await fetch(`${API_BASE}/api/agent`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...payload, client_id: (user?.client_code || user?.clientCode) }) });
                   const data = await res.json();
@@ -1172,6 +1173,11 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                     <label className="block text-xs font-bold text-muted-foreground uppercase mb-2">Agent Greeting Message</label>
                     <input name="greeting" defaultValue={agentSettings.greeting_message} placeholder="Hello, thanks for calling! How can I help you today?" className="w-full bg-background border border-border rounded-lg p-3 text-sm outline-none" required />
                     <p className="text-[10px] text-muted-foreground mt-1">The first thing the AI will say when answering.</p>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-muted-foreground uppercase mb-2">Ultravox Agent ID (Optional)</label>
+                    <input name="ultravox_agent_id" defaultValue={agentSettings.ultravox_agent_id} placeholder="e.g. 1a2b3c4d-5e6f..." className="w-full bg-background border border-border rounded-lg p-3 text-sm outline-none" />
+                    <p className="text-[10px] text-muted-foreground mt-1">If provided, overrides system prompt & voice with your custom Ultravox Agent.</p>
                   </div>
                   <div>
                      <label className="block text-xs font-bold text-muted-foreground uppercase mb-2">Personality & Tone</label>
