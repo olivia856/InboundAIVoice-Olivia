@@ -929,6 +929,8 @@ app.post('/api/twilio/inbound', async (req, res) => {
             delete uvPayloadConfig.voice;
             delete uvPayloadConfig.temperature;
             delete uvPayloadConfig.selectedTools;
+            delete uvPayloadConfig.firstSpeaker;
+            delete uvPayloadConfig.inactivityMessages;
         }
 
         const uvResponse = await fetch(ultravoxUrl, {
@@ -1518,6 +1520,8 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
             delete uvPayloadConfig.voice;
             delete uvPayloadConfig.temperature;
             delete uvPayloadConfig.selectedTools;
+            delete uvPayloadConfig.firstSpeaker;
+            delete uvPayloadConfig.inactivityMessages;
         }
 
         const uvResponse = await fetch(ultravoxUrl, {
