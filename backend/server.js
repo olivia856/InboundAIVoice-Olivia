@@ -1774,7 +1774,8 @@ app.patch('/api/agent/campaign-goal', async (req, res) => {
 
 // Twilio Call Status Webhook (Hangs up, fetches Summary from Ultravox!)
 app.post('/api/twilio/status/:client_id?', async (req, res) => {
-    const client_id = req.params.client_id || req.body.client_id;
+    let client_id = req.params.client_id || req.body.client_id || "";
+    if (client_id === "undefined" || client_id === "null") client_id = "";
     const callSid = req.body.CallSid;
     const callDuration = req.body.CallDuration || 0;
     const callStatus = req.body.CallStatus; // 'completed'
@@ -2020,7 +2021,8 @@ function forceIST(dateStr) {
 
 app.post('/api/tools/availability/:client_id?', async (req, res) => {
     try {
-        const client_id = req.params.client_id || req.body.client_id;
+        let client_id = req.params.client_id || req.body.client_id || "";
+        if (client_id === "undefined" || client_id === "null") client_id = "";
         const { target_date } = req.body;
         console.log(`[AI TOOL] 🔍 Availability check requested for: ${target_date}`);
         
@@ -2162,7 +2164,8 @@ function repairEmail(raw) {
 
 app.post('/api/tools/book/:client_id?', async (req, res) => {
     try {
-        const client_id = req.params.client_id || req.body.client_id;
+        let client_id = req.params.client_id || req.body.client_id || "";
+        if (client_id === "undefined" || client_id === "null") client_id = "";
         let { start_time, name, phone } = req.body;
         
         // HYPER-RESILIENT: Extract using the new Repair-First logic
