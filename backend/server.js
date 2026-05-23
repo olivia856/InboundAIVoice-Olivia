@@ -520,15 +520,15 @@ app.post('/api/twilio/inbound', async (req, res) => {
                         console.log(`[CallerMemory] caller_profiles table not ready yet: ${profileErr.message}`);
                     }
 
-                    if (callerProfile && callerProfile.full_name) {
-                        // === RICH PROFILE MATCH — best quality personalization ===
-                        console.log(`[CallerMemory] Profile Match: "${callerProfile.full_name}" (${From}), calls: ${callerProfile.total_calls}`);
-                        const firstName = callerProfile.first_name || callerProfile.full_name.split(' ')[0];
+                    let profileHasHistory = callerProfile && (callerProfile.total_calls > 0 || (callerProfile.conversation_history && callerProfile.conversation_history.length > 0));
+
+                    if (callerProfile && (callerProfile.full_name || profileHasHistory)) {
+                        console.log(`[CallerMemory] Profile Match for ${From}, name: ${callerProfile.full_name || 'UNKNOWN'}`);
                         const isCallback = callerProfile.last_call_direction === 'outbound' && 
                             (callerProfile.last_call_outcome === 'No Answer' || callerProfile.last_call_outcome === 'Missed' || callerProfile.last_call_outcome === 'Voicemail');
 
                         let profileContext = `[CALLER MEMORY — KNOWN CALLER PROFILE]:\n`;
-                        profileContext += `Name: ${callerProfile.full_name}\n`;
+                        if (callerProfile.full_name) profileContext += `Name: ${callerProfile.full_name}\n`;
                         profileContext += `Phone: ${From}\n`;
                         if (callerProfile.email) profileContext += `Email: ${callerProfile.email}\n`;
                         if (callerProfile.city) profileContext += `City: ${callerProfile.city}\n`;
@@ -546,17 +546,29 @@ app.post('/api/twilio/inbound', async (req, res) => {
                         }
                         if (callerProfile.notes) profileContext += `\nNotes: ${callerProfile.notes}\n`;
 
-                        if (isCallback) {
-                            profileContext += `\nCALLBACK DETECTED: We tried reaching ${firstName} via an outbound call but they did not answer. They are now calling back. Reference why we called them.`;
-                            initialMessage = `Hi ${firstName}! I'm glad you called back. We tried reaching you earlier. How can I help you?`;
-                        } else if ((callerProfile.total_calls || 0) > 0) {
-                            profileContext += `\nRETURNING CALLER: ${firstName} has called before. Be warm and continue naturally.`;
-                            initialMessage = `Hi ${firstName}, welcome back! How can I help you today?`;
+                        if (callerProfile.full_name) {
+                            const firstName = callerProfile.first_name || callerProfile.full_name.split(' ')[0];
+                            if (isCallback) {
+                                profileContext += `\nCALLBACK DETECTED: We tried reaching ${firstName} via an outbound call but they did not answer. They are now calling back. Reference why we called them.`;
+                                initialMessage = `Hi ${firstName}! I'm glad you called back. We tried reaching you earlier. How can I help you?`;
+                            } else if ((callerProfile.total_calls || 0) > 0) {
+                                profileContext += `\nRETURNING CALLER: ${firstName} has called before. Be warm and continue naturally.`;
+                                initialMessage = `Hi ${firstName}, welcome back! How can I help you today?`;
+                            } else {
+                                initialMessage = `Hi ${firstName}, great to hear from you! How can I help you today?`;
+                            }
+                            profileContext += `\n\nINSTRUCTION: Greet them by first name "${firstName}" immediately. DO NOT ask for their name — you already know it. If you learn any NEW details (email, city, business type, company) during the conversation, IMMEDIATELY call save_caller_info to store them. Be warm and personal.`;
                         } else {
-                            initialMessage = `Hi ${firstName}, great to hear from you! How can I help you today?`;
+                            if (isCallback) {
+                                profileContext += `\nCALLBACK DETECTED: We tried reaching them via an outbound call but they did not answer. They are now calling back.`;
+                                initialMessage = `Hi! I'm glad you called back. We tried reaching you earlier. How can I help you?`;
+                            } else {
+                                profileContext += `\nRETURNING CALLER: They have called before, but we don't have their name yet.`;
+                                initialMessage = `Hi, welcome back! How can I help you today?`;
+                            }
+                            profileContext += `\n\nINSTRUCTION: Greet them warmly. You do NOT know their name yet. Naturally ask for their name and any other details (email, city, business), and IMMEDIATELY call save_caller_info to store it.`;
                         }
 
-                        profileContext += `\n\nINSTRUCTION: Greet them by first name "${firstName}" immediately. DO NOT ask for their name — you already know it. If you learn any NEW details (email, city, business type, company) during the conversation, IMMEDIATELY call save_caller_info to store them. Be warm and personal.`;
                         finalPrompt += `\n\n${profileContext}`;
                         console.log(`[CallerMemory] Profile opening: "${initialMessage}"`);
 
@@ -701,7 +713,7 @@ app.post('/api/twilio/inbound', async (req, res) => {
             {
                 temporaryTool: {
                     modelToolName: "save_caller_info",
-                    description: "Save or update the caller's personal details to the CRM database. IMPORTANT: Call this tool IMMEDIATELY whenever you learn ANY new detail about the caller — their name, email, city, business type, or company. Do NOT wait until end of conversation. Call this multiple times if needed as you learn more.",
+                    description: "Save or update the caller's personal details to the CRM database. IMPORTANT: Call this tool IMMEDIATELY whenever you learn ANY new detail about the caller — their name, email, city, business type, or company. If you do not have their full name, make it a priority to ask for it organically. Do NOT wait until end of conversation. Call this multiple times if needed as you learn more.",
                     dynamicParameters: [
                         { name: "full_name", location: "PARAMETER_LOCATION_BODY", schema: { type: "string", description: "The caller's full name" }, required: false },
                         { name: "email", location: "PARAMETER_LOCATION_BODY", schema: { type: "string", description: "Email address exactly as spoken. Pass raw text — the system auto-converts." }, required: false },
@@ -1153,9 +1165,11 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
                         console.log(`[Outbound CallerMemory] caller_profiles table not ready: ${profileErr.message}`);
                     }
 
-                    if (callerProfile && callerProfile.full_name) {
-                        console.log(`[Outbound CallerMemory] Profile Match: "${callerProfile.full_name}" (${toPhone}), calls: ${callerProfile.total_calls}`);
-                        leadName = callerProfile.full_name;
+                    let profileHasHistory = callerProfile && (callerProfile.total_calls > 0 || (callerProfile.conversation_history && callerProfile.conversation_history.length > 0));
+                    
+                    if (callerProfile && (callerProfile.full_name || profileHasHistory)) {
+                        console.log(`[Outbound CallerMemory] Profile Match: name: ${callerProfile.full_name || 'UNKNOWN'} (${toPhone}), calls: ${callerProfile.total_calls}`);
+                        leadName = callerProfile.full_name || leadName || reqName || "";
                         leadEmail = callerProfile.email || "";
                         // Build history from profile
                         if (callerProfile.conversation_history && Array.isArray(callerProfile.conversation_history) && callerProfile.conversation_history.length > 0) {
@@ -1243,6 +1257,8 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
             finalPrompt += `\n\n[CRITICAL OUTBOUND CONTEXT]: You are initiating an outbound call to a designated lead.`;
             if (resolvedName) {
                 finalPrompt += `\n- The lead's name is "${resolvedName}". Greet them naturally by their first name "${firstName}" as soon as they answer. DO NOT ask them for their name.`;
+            } else {
+                finalPrompt += `\n- The lead's name is UNKNOWN. Greet them warmly and organically ask for their name early in the call, and IMMEDIATELY call save_caller_info to save it.`;
             }
             finalPrompt += `\n- Phone number is: ${toPhone}. DO NOT ask for their phone number.`;
             if (leadEmail) finalPrompt += `\n- Email: ${leadEmail}. DO NOT ask unless updating.`;
@@ -1385,7 +1401,7 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
         selectedTools.unshift({
             temporaryTool: {
                 modelToolName: "save_caller_info",
-                description: "Save or update the lead's personal details to the CRM database. Call this IMMEDIATELY whenever you learn ANY new detail about the lead \u2014 their email, city, business type, or company. Do NOT wait until end of conversation.",
+                description: "Save or update the lead's personal details to the CRM database. Call this IMMEDIATELY whenever you learn ANY new detail about the lead \u2014 their name, email, city, business type, or company. Do NOT wait until end of conversation.",
                 dynamicParameters: [
                     { name: "full_name", location: "PARAMETER_LOCATION_BODY", schema: { type: "string", description: "The lead's full name" }, required: false },
                     { name: "email", location: "PARAMETER_LOCATION_BODY", schema: { type: "string", description: "Email address exactly as spoken." }, required: false },
