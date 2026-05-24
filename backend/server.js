@@ -1514,8 +1514,8 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
             maxDuration: '1800s'
         };
 
-        if (agentData?.ultravox_agent_id && agentData.ultravox_agent_id.trim() !== '') {
-            ultravoxUrl = `https://api.ultravox.ai/api/agents/${agentData.ultravox_agent_id.trim()}/calls`;
+        if (agentData?.outbound_agent_id && agentData.outbound_agent_id.trim() !== '') {
+            ultravoxUrl = `https://api.ultravox.ai/api/agents/${agentData.outbound_agent_id.trim()}/calls`;
             delete uvPayloadConfig.systemPrompt;
             delete uvPayloadConfig.voice;
             delete uvPayloadConfig.temperature;
@@ -1678,6 +1678,10 @@ app.get('/api/recordings/:callSid', async (req, res) => {
 
     } catch (err) {
         console.error("[Recording Proxy] Error fetching recording:", err.message);
+        if (err.response) {
+            console.error("Twilio Status:", err.response.status, "Data:", err.response.data);
+            return res.status(err.response.status).send(`Twilio Error: ${err.response.status}`);
+        }
         res.status(500).send("Error fetching recording stream");
     }
 });
@@ -1737,6 +1741,23 @@ app.get('/api/agent', async (req, res) => {
     }
 });
 
+// PROXY Ultravox Agent Fetch (Safe wrapper so frontend doesn't need API keys)
+app.get('/api/ultravox/proxy-agent/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const uvRes = await fetch(`https://api.ultravox.ai/api/agents/${id}`, {
+            headers: { 'X-API-Key': ACTIVE_ULTRAVOX_KEY }
+        });
+        if (!uvRes.ok) {
+            return res.status(uvRes.status).json({ error: "Failed to fetch from Ultravox" });
+        }
+        const data = await uvRes.json();
+        res.json({ success: true, agent: data });
+    } catch (e) {
+        res.status(500).json({ error: "Server error fetching proxy" });
+    }
+});
+
 // POST Agent Settings from Dashboard (Saving updates!)
 app.post('/api/agent', async (req, res) => {
     try {
@@ -1744,13 +1765,13 @@ app.post('/api/agent', async (req, res) => {
             client_id, system_prompt, voice_preset, temperature, 
             personality, greeting_message,
             working_days, open_time, close_time, non_working_dates,
-            tools_config, campaign_goal, ultravox_agent_id
+            tools_config, campaign_goal, ultravox_agent_id, outbound_agent_id
         } = req.body;
         
         const updateData = {
             client_id, system_prompt, voice_preset, temperature, 
             personality, greeting_message, working_days, open_time, 
-            close_time, non_working_dates, tools_config, ultravox_agent_id
+            close_time, non_working_dates, tools_config, ultravox_agent_id, outbound_agent_id
         };
         
         if (req.body.record_calls !== undefined) updateData.record_calls = req.body.record_calls;
@@ -1844,20 +1865,11 @@ app.post('/api/twilio/status/:client_id?', async (req, res) => {
                 let isNegative = negativeWords.some(word => lowerSummary.includes(word)) || isExplicitlyNotBooked;
                 let isPositive = positiveWords.some(word => lowerSummary.includes(word)) || isExplicitlyBooked;
 
-                // Map a short 1-2 word reason from keywords
+                // Map strictly to Positive, Negative, or Neutral
                 let mappedReason = null;
-                if (isExplicitlyNotBooked) mappedReason = "Not Booked";
-                else if (isExplicitlyBooked) mappedReason = "Booked";
-                else if (lowerSummary.includes("frustrat")) mappedReason = "Frustrated";
-                else if (lowerSummary.includes("angr")) mappedReason = "Angry";
-                else if (lowerSummary.includes("disappoint")) mappedReason = "Disappointed";
-                else if (lowerSummary.includes("escalat")) mappedReason = "Escalated";
-                else if (lowerSummary.includes("interest")) mappedReason = "Interested";
-                else if (lowerSummary.includes("thank")) mappedReason = "Thankful";
-                else if (lowerSummary.includes("satisf") || lowerSummary.includes("pleased")) mappedReason = "Satisfied";
-                else if (lowerSummary.includes("resolv")) mappedReason = "Resolved";
-                else if (isPositive) mappedReason = "Positive";
+                if (isPositive) mappedReason = "Positive";
                 else if (isNegative) mappedReason = "Negative";
+                else mappedReason = "Neutral";
 
                 // ── Check if AI already logged a real sentiment via log_call_outcome ──
                 const { data: currCall } = await supabase.from('calls').select('sentiment_category, sentiment').eq('twilio_sid', callSid).single();
@@ -1872,20 +1884,9 @@ app.post('/api/twilio/status/:client_id?', async (req, res) => {
                     console.log(`[SENTIMENT] AI already logged: ${finalCategory} (${finalSentiment}) for ${callSid} — keeping AI result.`);
                 } else {
                     // Fallback: use keyword scan on the summary
-                    if (isNegative && !isPositive) {
-                        finalCategory = 'Negative';
-                        finalSentiment = mappedReason || 'Negative';
-                        console.log(`[SENTIMENT] Keyword fallback → NEGATIVE for ${callSid}.`);
-                    } else if (isPositive && !isNegative) {
-                        finalCategory = 'Positive';
-                        finalSentiment = mappedReason || 'Positive';
-                        console.log(`[SENTIMENT] Keyword fallback → POSITIVE for ${callSid}.`);
-                    } else {
-                        // If conflict or none, default to neutral but keep reasoned tag
-                        finalCategory = 'Neutral';
-                        finalSentiment = mappedReason || 'Neutral';
-                        console.log(`[SENTIMENT] No strong/conflicting signal found — staying Neutral for ${callSid}.`);
-                    }
+                    finalCategory = mappedReason;
+                    finalSentiment = mappedReason;
+                    console.log(`[SENTIMENT] Keyword fallback → ${mappedReason} for ${callSid}.`);
                 }
 
                 await supabase.from('calls').update({
@@ -2574,6 +2575,18 @@ app.get('/api/appointments', async (req, res) => {
     } catch(err) { res.status(500).json({ error: "API Failure" }); }
 });
 
+// DELETE a specific lead
+app.delete('/api/crm/lead/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { error } = await supabase.from('leads').delete().eq('id', id);
+        if (error) throw error;
+        res.json({ success: true, message: "Lead deleted successfully" });
+    } catch (err) {
+        res.status(500).json({ error: "Failed to delete lead" });
+    }
+});
+
 // --- DASHBOARD APPOINTMENT MANAGEMENT ---
 app.post('/api/appointments/manual', async (req, res) => {
     try {
@@ -3093,12 +3106,43 @@ app.post('/api/campaigns/gsheet-launch', async (req, res) => {
 
 app.get('/api/reports', async (req, res) => {
     try {
-        const { client_id } = req.query;
+        const { client_id, date_filter } = req.query;
         // SECURITY: Never return all-client reports - require client_id
         if (!client_id) return res.json({ success: true, metrics: null });
         let callsQuery = supabase.from('calls').select('*').eq('client_id', client_id);
         let leadsQuery = supabase.from('leads').select('id').eq('client_id', client_id);
         let appsQuery = supabase.from('appointments').select('*').eq('client_id', client_id);
+
+        if (date_filter && date_filter !== 'all_time') {
+            const now = new Date();
+            let startDate = new Date(now);
+            startDate.setHours(0,0,0,0);
+            let endDate = new Date(now);
+            endDate.setHours(23,59,59,999);
+
+            if (date_filter === 'today') {
+                // today
+            } else if (date_filter === 'yesterday') {
+                startDate.setDate(now.getDate() - 1);
+                endDate = new Date(startDate);
+                endDate.setHours(23,59,59,999);
+            } else if (date_filter === 'last_7_days') {
+                startDate.setDate(now.getDate() - 7);
+            } else if (date_filter === 'this_month') {
+                startDate.setDate(1);
+            } else if (date_filter === 'last_month') {
+                startDate.setMonth(now.getMonth() - 1);
+                startDate.setDate(1);
+                endDate = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+            }
+
+            const startIso = startDate.toISOString();
+            const endIso = endDate.toISOString();
+
+            callsQuery = callsQuery.gte('created_at', startIso).lte('created_at', endIso);
+            leadsQuery = leadsQuery.gte('created_at', startIso).lte('created_at', endIso);
+            appsQuery = appsQuery.gte('created_at', startIso).lte('created_at', endIso);
+        }
 
         const { data: calls } = await callsQuery;
         const { data: leads } = await leadsQuery;

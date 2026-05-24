@@ -219,15 +219,17 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
   const [leads, setLeads] = useState([]);
   const [knowledgeBase, setKnowledgeBase] = useState([]);
   const [campaigns, setCampaigns] = useState([]);
+  const [appointments, setAppointments] = useState([]);
   const [reports, setReports] = useState(null);
+  const [reportDateRange, setReportDateRange] = useState('this_month');
   
   const [agentSettings, setAgentSettings] = useState({ system_prompt: '', voice_preset: 'Mark', temperature: 0.3, greeting_message: '', personality: 'professional', ultravox_agent_id: '' });
   const [integrations, setIntegrations] = useState([]);
-  const [appointments, setAppointments] = useState([]);
   const [calendarDate, setCalendarDate] = useState(new Date());
   const [availableSlots, setAvailableSlots] = useState([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [calendarModal, setCalendarModal] = useState(null);
+  const [showProfileModal, setShowProfileModal] = useState(false);
   const [editingAppt, setEditingAppt] = useState(null);
   const [viewSummaryModal, setViewSummaryModal] = useState(null);
   const [expandedSentiment, setExpandedSentiment] = useState({});
@@ -282,6 +284,44 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
 
   const isPortalClient = !!((user?.client_code || user?.clientCode)); // any client account (portal URL or Login as)
 
+  const handleImageUpload = (e, field) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const base64 = event.target.result;
+      const clientId = user?.id || user?.client_code || user?.clientCode;
+      try {
+        const resp = await fetch(`${API_BASE}/api/clients/${clientId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ [field]: base64 })
+        });
+        const d = await resp.json();
+        if (d.success) {
+          showToast('Image uploaded successfully', 'success');
+          setTimeout(() => window.location.reload(), 1000);
+        } else showToast('Failed to upload', 'error');
+      } catch (err) { showToast('Upload error', 'error'); }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleForceResetPassword = async (userId) => {
+    if (!window.confirm("Are you sure you want to force reset this user's password to 'default123'?")) return;
+    try {
+      const resp = await fetch(`${API_BASE}/api/clients/${userId || user?.id || user?.client_code || user?.clientCode}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: 'default123' })
+      });
+      const d = await resp.json();
+      if (d.success) {
+        showToast('Password reset to default123', 'success');
+      } else showToast('Failed to reset', 'error');
+    } catch (err) { showToast('Error resetting password', 'error'); }
+  };
+
   const fetchAll = () => {
     const clientId = user?.client_code || user?.clientCode;
     if (!clientId) {
@@ -298,8 +338,15 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
     fetch(`${API_BASE}/api/agent${query}`).then(r => r.json()).then(d => { if (d.success && d.agent) { setAgentSettings(d.agent); if (d.agent.campaign_goal && !document.getElementById('campaign_goal')?.matches(':focus')) setCampaignGoal(d.agent.campaign_goal); } }).catch(() => {});
     fetch(`${API_BASE}/api/integrations${query}`).then(r => r.json()).then(d => { if (d.success) setIntegrations(d.integrations || []); }).catch(() => {});
     fetch(`${API_BASE}/api/appointments${query}`).then(r => r.json()).then(d => { if (d.success) setAppointments(d.appointments || []); }).catch(() => {});
-    fetch(`${API_BASE}/api/reports${query}`).then(r => r.json()).then(d => { if (d.success) setReports(d.metrics); }).catch(() => {});
+    fetch(`${API_BASE}/api/reports${query}&date_filter=${reportDateRange}`).then(r => r.json()).then(d => { if (d.success) setReports(d.metrics); }).catch(() => {});
   };
+
+  useEffect(() => {
+    const clientId = user?.client_code || user?.clientCode;
+    if (clientId) {
+      fetch(`${API_BASE}/api/reports?client_id=${clientId}&date_filter=${reportDateRange}`).then(r => r.json()).then(d => { if (d.success) setReports(d.metrics); }).catch(() => {});
+    }
+  }, [reportDateRange, user]);
 
   useEffect(() => { 
     fetchAll(); 
@@ -399,14 +446,14 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
     { id: 'dashboard', label: 'Dashboard', svgPath: <><rect x="3" y="3" width="7" height="7" rx="1.5" fill="currentColor" opacity="0.9"/><rect x="14" y="3" width="7" height="7" rx="1.5" fill="currentColor" opacity="0.6"/><rect x="3" y="14" width="7" height="7" rx="1.5" fill="currentColor" opacity="0.6"/><rect x="14" y="14" width="7" height="7" rx="1.5" fill="currentColor" opacity="0.4"/></> },
     { id: 'calendar', label: 'Calendar', svgPath: <><rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="1.5" fill="none"/><line x1="3" y1="10" x2="21" y2="10" stroke="currentColor" strokeWidth="1.5"/><line x1="8" y1="3" x2="8" y2="7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><line x1="16" y1="3" x2="16" y2="7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><circle cx="8" cy="15" r="1" fill="currentColor"/><circle cx="12" cy="15" r="1" fill="currentColor"/><circle cx="16" cy="15" r="1" fill="currentColor"/></> },
     { id: 'agent', label: 'Inbound Agent', svgPath: <><circle cx="12" cy="8" r="3.5" stroke="currentColor" strokeWidth="1.5" fill="none"/><path d="M5 20c0-3.87 3.13-7 7-7s7 3.13 7 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" fill="none"/><circle cx="19" cy="8" r="1.5" fill="currentColor" opacity="0.6"/><line x1="19" y1="5" x2="19" y2="3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></> },
-    { id: 'tools', label: 'Tools', svgPath: <><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/></> },
     { id: 'campaigns', label: 'Outbound Campaigns', svgPath: <><path d="M22 2L11 13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/><path d="M22 2L15 22l-4-9-9-4 20-7z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/></> },
     { id: 'logs', label: 'Call Logs', svgPath: <><path d="M5 4h4l2 5-2.5 1.5a11 11 0 005 5L15 13l5 2v4a2 2 0 01-2 2A16 16 0 013 5a2 2 0 012-1z" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/><circle cx="18" cy="6" r="2.5" fill="currentColor" opacity="0.6"/></> },
     { id: 'knowledge_base', label: 'Knowledge Base', svgPath: <><rect x="4" y="3" width="12" height="16" rx="1.5" stroke="currentColor" strokeWidth="1.5" fill="none"/><line x1="7" y1="8" x2="13" y2="8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><line x1="7" y1="11" x2="13" y2="11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><line x1="7" y1="14" x2="10" y2="14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><path d="M16 6h2a2 2 0 012 2v11a2 2 0 01-2 2H8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" fill="none"/></> },
     { id: 'leads', label: 'Lead CRM', svgPath: <><circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.5" fill="none"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><path d="M5.64 5.64l1.42 1.42M16.95 16.95l1.41 1.41M5.64 18.36l1.42-1.42M16.95 7.05l1.41-1.41" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></> },
     { id: 'integrations_logs', label: 'Integrations', svgPath: <><circle cx="5" cy="12" r="2" stroke="currentColor" strokeWidth="1.5" fill="none"/><circle cx="19" cy="5" r="2" stroke="currentColor" strokeWidth="1.5" fill="none"/><circle cx="19" cy="19" r="2" stroke="currentColor" strokeWidth="1.5" fill="none"/><line x1="7" y1="11" x2="17" y2="6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><line x1="7" y1="13" x2="17" y2="18" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></> },
     { id: 'recordings', label: 'Voice Recordings', svgPath: <><path d="M12 2a3 3 0 013 3v7a3 3 0 01-6 0V5a3 3 0 013-3z" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round"/><path d="M19 10v1a7 7 0 01-14 0v-1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" fill="none"/><line x1="12" y1="18" x2="12" y2="22" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><line x1="8" y1="22" x2="16" y2="22" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></> },
-    { id: 'reports', label: 'Reports', svgPath: <><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/></> },
+    { id: 'reports', label: 'Analytics', svgPath: <><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/></> },
+    { id: 'tools', label: 'Tools', svgPath: <><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/></> },
     { id: 'credentials', label: 'API Credentials', svgPath: <><rect x="3" y="11" width="18" height="11" rx="2" stroke="currentColor" strokeWidth="1.5" fill="none"/><path d="M7 11V7a5 5 0 0110 0v4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" fill="none"/><circle cx="12" cy="16" r="1.5" fill="currentColor"/></> },
   ];
 
@@ -524,18 +571,25 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
       {/* Sidebar — Futuristic */}
       <aside className="w-[255px] min-w-[255px] bg-sidebar border-r border-border/60 flex flex-col relative z-10">
         {/* Brand Header */}
-        <div className="flex items-center justify-between px-5 py-5 border-b border-border/50">
+        <div 
+          className="flex items-center justify-between px-5 py-5 border-b border-border/50 cursor-pointer hover:bg-white/5 transition"
+          onClick={() => setShowProfileModal(true)}
+        >
           <div className="flex items-center gap-3">
             {/* Futuristic Logo Mark */}
             <div className="relative w-9 h-9 flex-shrink-0">
-              <div className="absolute inset-0 bg-gradient-to-br from-violet-600 to-indigo-600 rounded-xl opacity-90 shadow-glow" />
-              <div className="relative w-full h-full flex items-center justify-center">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                  <polygon points="12,3 21,8 21,16 12,21 3,16 3,8" stroke="rgba(255,255,255,0.9)" strokeWidth="1.5" fill="none" strokeLinejoin="round"/>
-                  <polygon points="12,7 17,10 17,14 12,17 7,14 7,10" fill="rgba(255,255,255,0.25)" stroke="rgba(255,255,255,0.6)" strokeWidth="1" strokeLinejoin="round"/>
-                  <circle cx="12" cy="12" r="2" fill="white"/>
-                </svg>
+              <div className="absolute inset-0 bg-gradient-to-br from-violet-600 to-indigo-600 rounded-xl opacity-90 shadow-glow overflow-hidden">
+                {user?.company_logo && <img src={user.company_logo} alt="Company Logo" className="w-full h-full object-cover" />}
               </div>
+              {!user?.company_logo && (
+                <div className="relative w-full h-full flex items-center justify-center">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                    <polygon points="12,3 21,8 21,16 12,21 3,16 3,8" stroke="rgba(255,255,255,0.9)" strokeWidth="1.5" fill="none" strokeLinejoin="round"/>
+                    <polygon points="12,7 17,10 17,14 12,17 7,14 7,10" fill="rgba(255,255,255,0.25)" stroke="rgba(255,255,255,0.6)" strokeWidth="1" strokeLinejoin="round"/>
+                    <circle cx="12" cy="12" r="2" fill="white"/>
+                  </svg>
+                </div>
+              )}
             </div>
             <div>
               <h1 className="font-bold text-[14.5px] leading-tight tracking-tight">{user?.whitelabel || 'Azlon AI'}</h1>
@@ -646,9 +700,9 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
             </div>
             <div className="grid grid-cols-4 gap-5">
               {[
-                { label: 'Total Calls', value: reports?.totalCalls || callLogs.length, sub: 'All time', color: 'from-violet-500/10 to-indigo-500/10', accent: 'text-violet-400' },
+                { label: 'Total Calls', value: callLogs.filter(c => { const d = new Date(c.created_at); const n = new Date(); return d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear(); }).length, sub: 'This month', color: 'from-violet-500/10 to-indigo-500/10', accent: 'text-violet-400' },
                 { label: 'Appointments', value: reports?.bookedAppointments || appointments.length, sub: 'Booked by AI', color: 'from-emerald-500/10 to-teal-500/10', accent: 'text-emerald-400' },
-                { label: 'Active Contacts', value: contacts.length, sub: 'In CRM', color: 'from-blue-500/10 to-cyan-500/10', accent: 'text-blue-400' },
+                { label: 'Active Contacts', value: new Set(callLogs.filter(c => c.from_phone || c.to_phone).map(c => c.direction === 'inbound' ? c.from_phone : c.to_phone)).size, sub: 'Unique Callers', color: 'from-blue-500/10 to-cyan-500/10', accent: 'text-blue-400' },
                 { label: 'Completed', value: reports?.hourlyVolume ? reports.hourlyVolume.reduce((acc, h) => acc + h.count, 0) : callLogs.filter(c => c.status === 'completed').length, sub: 'Finished calls', color: 'from-amber-500/10 to-orange-500/10', accent: 'text-amber-400' }
               ].map((stat, i) => (
                 <div key={i} className={`stat-card bg-gradient-to-br ${stat.color} border border-border rounded-2xl p-6`}>
@@ -830,9 +884,23 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
         {/* ── REPORTS ── */}
         {activePage === 'reports' && (
           <div className="space-y-8 fade-in w-full">
-             <div>
-               <h2 className="text-3xl font-extrabold tracking-tight">Analytics & Reports</h2>
-               <p className="text-sm text-muted-foreground mt-1.5 font-medium">Live business metrics and conversions.</p>
+             <div className="flex justify-between items-center">
+               <div>
+                 <h2 className="text-3xl font-extrabold tracking-tight">Analytics</h2>
+                 <p className="text-sm text-muted-foreground mt-1.5 font-medium">Live business metrics and conversions.</p>
+               </div>
+               <select 
+                 className="bg-card border border-border text-sm p-2 rounded-lg outline-none cursor-pointer"
+                 value={reportDateRange} 
+                 onChange={e => setReportDateRange(e.target.value)}
+               >
+                 <option value="all_time">All Time</option>
+                 <option value="today">Today</option>
+                 <option value="yesterday">Yesterday</option>
+                 <option value="last_7_days">Last 7 Days</option>
+                 <option value="this_month">This Month</option>
+                 <option value="last_month">Last Month</option>
+               </select>
              </div>
              {reports ? (
                <div className="grid grid-cols-3 gap-5">
@@ -1171,17 +1239,37 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                   <div>
                     <label className="block text-xs font-bold text-muted-foreground uppercase mb-2">Agent Greeting Message</label>
-                    <input name="greeting" defaultValue={agentSettings.greeting_message} placeholder="Hello, thanks for calling! How can I help you today?" className="w-full bg-background border border-border rounded-lg p-3 text-sm outline-none" required />
+                    <input name="greeting" defaultValue={agentSettings.greeting_message} placeholder="Hello, thanks for calling! How can I help you today?" className="w-full bg-background border border-border rounded-lg p-3 text-sm outline-none" required disabled={user?.role !== 'superadmin'} />
                     <p className="text-[10px] text-muted-foreground mt-1">The first thing the AI will say when answering.</p>
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-muted-foreground uppercase mb-2">Ultravox Agent ID (Optional)</label>
-                    <input name="ultravox_agent_id" defaultValue={agentSettings.ultravox_agent_id} placeholder="e.g. 1a2b3c4d-5e6f..." className="w-full bg-background border border-border rounded-lg p-3 text-sm outline-none" />
-                    <p className="text-[10px] text-muted-foreground mt-1">If provided, overrides system prompt & voice with your custom Ultravox Agent.</p>
+                    <label className="block text-xs font-bold text-muted-foreground uppercase mb-2">Agent ID (Optional)</label>
+                    <div className="flex gap-2">
+                      <input id="inbound_agent_id_input" name="ultravox_agent_id" defaultValue={agentSettings.ultravox_agent_id} placeholder="e.g. 1a2b3c4d-5e6f..." className="flex-1 bg-background border border-border rounded-lg p-3 text-sm outline-none" disabled={user?.role !== 'superadmin'} />
+                      {user?.role === 'superadmin' && (
+                        <button type="button" onClick={async () => {
+                          const val = document.getElementById('inbound_agent_id_input').value;
+                          if(!val) return;
+                          try {
+                            showToast('Syncing config...', 'success');
+                            const res = await fetch(`${API_BASE}/api/ultravox/proxy-agent/${val}`);
+                            const data = await res.json();
+                            if(data.success) {
+                              if(data.agent.systemPrompt) document.getElementsByName('prompt')[0].value = data.agent.systemPrompt;
+                              if(data.agent.voice) document.getElementsByName('voice')[0].value = data.agent.voice;
+                              showToast('Config synced!', 'success');
+                            } else {
+                              showToast('Failed to sync', 'error');
+                            }
+                          } catch(e) { showToast('Network Error', 'error'); }
+                        }} className="bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded-lg text-xs font-bold transition">Sync</button>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-muted-foreground mt-1">Auto-syncs prompt and voice from your cloud configuration.</p>
                   </div>
                   <div>
                      <label className="block text-xs font-bold text-muted-foreground uppercase mb-2">Personality & Tone</label>
-                     <select name="personality" defaultValue={agentSettings.personality || 'professional'} className="w-full bg-background border border-border rounded-lg p-3 text-sm outline-none">
+                     <select name="personality" defaultValue={agentSettings.personality || 'professional'} className="w-full bg-background border border-border rounded-lg p-3 text-sm outline-none" disabled={user?.role !== 'superadmin'}>
                        <option value="professional">Professional & Helpful Support</option>
                        <option value="warm">Warm & Empathetic</option>
                        <option value="sales">Aggressive Sales Closer</option>
@@ -1193,24 +1281,21 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
 
                 <h3 className="font-semibold text-sm mb-3 border-b border-border pb-3">Advanced System Instructions</h3>
                 <p className="text-xs text-muted-foreground mb-3">Defines the specific guardrails and logic of the agent. (Do not put Knowledge Base text here, use the Knowledge Base tab instead).</p>
-                <textarea name="prompt" defaultValue={agentSettings.system_prompt} className="w-full bg-background border border-border rounded-lg p-4 font-mono text-[13px] outline-none resize-none h-[150px] mb-6" placeholder="You are the smart AI agent..." required />
+                <textarea name="prompt" defaultValue={agentSettings.system_prompt} className="w-full bg-background border border-border rounded-lg p-4 font-mono text-[13px] outline-none resize-none h-[150px] mb-6 disabled:opacity-50" placeholder="You are the smart AI agent..." required disabled={user?.role !== 'superadmin'} />
                 
                 <div className="grid grid-cols-2 gap-6">
                   <div>
                     <label className="block text-xs font-bold text-muted-foreground uppercase mb-2">Voice Model</label>
-                    <select name="voice" defaultValue={agentSettings.voice_preset} className="w-full bg-background border border-border rounded-lg p-3 text-sm outline-none">
-                      <optgroup label="Standard AI Voices">
+                    <select name="voice" defaultValue={agentSettings.voice_preset} className="w-full bg-background border border-border rounded-lg p-3 text-sm outline-none" disabled={user?.role !== 'superadmin'}>
+                      <optgroup label="AI Voices">
                         <option value="9ed99f35-ddd5-4efb-9c62-9ce9483bab61">🇺🇸 Mark (Male, Professional)</option>
-                        <option value="terrence">🇺🇸 Terrence (Male, Deep)</option>
+                        <option value="79a125e8-cd45-4c13-8a67-188112f4dd22">🇺🇸 Terrence (Male, Deep)</option>
                         <option value="b28f7f08-685c-4219-a2a0-c539b985b9fd">🇺🇸 Alex (Male, Friendly)</option>
                         <option value="a88fb2af-16ec-41a2-b6e9-86ef2f5c9622">🇺🇸 Jessica (Female, Warm)</option>
-                        <option value="lily">🇺🇸 Lily (Female, Professional)</option>
                         <option value="f972fbf6-89f5-40a1-9ad7-ee0aa445e8c3">🇺🇸 Sarah (Female, Conversational)</option>
                         <option value="5f8e97b1-cd48-431a-b6a1-3b94306d8914">🇬🇧 David (Male, British)</option>
                         <option value="d20e12df-6fd9-428e-a81f-ba0090de13d9">🇬🇧 Emily (Female, British)</option>
                         <option value="bf3ee560-7c86-4d46-9f23-81b12dd6ba5f">🇺🇸 Ryan (Male, Energetic)</option>
-                      </optgroup>
-                      <optgroup label="Australian Voices">
                         <option value="280a8e4d-2974-4593-87eb-fb74f0278a2e">🇦🇺 Arlo (Male, Australian)</option>
                         <option value="8ff05d3d-d78d-40a6-88c1-dd1efcf571f0">🇦🇺 Hannah (Female, Australian)</option>
                       </optgroup>
@@ -1221,7 +1306,7 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-muted-foreground uppercase mb-2">Creativity (Temp)</label>
-                    <input name="temp" type="number" step="0.1" max="1" min="0" defaultValue={agentSettings.temperature} className="w-full bg-background border border-border rounded-lg p-3 text-sm outline-none" />
+                    <input name="temp" type="number" step="0.1" max="1" min="0" defaultValue={agentSettings.temperature} className="w-full bg-background border border-border rounded-lg p-3 text-sm outline-none" disabled={user?.role !== 'superadmin'} />
                   </div>
                 </div>
                 <div className="mt-8 flex justify-end pt-4 border-t border-border">
@@ -1621,12 +1706,19 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                               'bg-primary/20 text-primary'
                             )}>{l.segment || 'Unknown'}</span>
                           </td>
-                          <td className="py-3 px-4 text-right">
+                          <td className="py-3 px-4 text-right flex justify-end items-center gap-2">
                             <button
                               onClick={() => setExpandedRecording(isExpanded ? null : `lead-${l.id}`)}
                               className="text-xs text-muted-foreground hover:text-primary transition px-2 py-1 rounded border border-border hover:border-primary/30 font-semibold"
                             >
                               {isExpanded ? 'Hide Memory' : 'View Memory'}
+                            </button>
+                            <button onClick={async () => {
+                              if(!window.confirm('Delete this lead?')) return;
+                              await fetch(`${API_BASE}/api/crm/lead/${l.id}`, { method: 'DELETE' });
+                              fetchDashboardData();
+                            }} className="text-red-500 bg-red-500/10 p-1.5 rounded hover:bg-red-500/20 transition">
+                              <Trash2 size={14} />
                             </button>
                           </td>
                         </tr>
@@ -2526,6 +2618,83 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
               </div>
               <button type="submit" className="w-full bg-primary hover:bg-primary/90 text-white font-black py-4 rounded-2xl shadow-xl shadow-primary/20 mt-4 transition-all transform hover:-translate-y-0.5 active:translate-y-0 text-sm uppercase tracking-widest">Deploy Manual Target</button>
             </form>
+          </div>
+        </div>
+      {showProfileModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-card w-full max-w-lg rounded-2xl border border-border shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+            {/* Banner/Logo */}
+            <div className="h-32 bg-gradient-to-r from-violet-600/50 to-indigo-600/50 relative">
+              {user?.company_logo && <img src={user.company_logo} className="w-full h-full object-cover opacity-50" />}
+              <div className="absolute top-2 right-2 flex gap-2">
+                <label className="cursor-pointer bg-black/50 hover:bg-black/70 text-white p-2 rounded-full backdrop-blur-md transition">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+                  <input type="file" accept="image/*" className="hidden" onChange={(e) => handleImageUpload(e, 'company_logo')} />
+                </label>
+              </div>
+              <button onClick={() => setShowProfileModal(false)} className="absolute top-3 left-3 w-8 h-8 flex items-center justify-center bg-black/40 hover:bg-black/60 text-white rounded-full transition">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+              </button>
+            </div>
+            
+            {/* Profile Info */}
+            <div className="px-6 pb-6 relative">
+              {/* Profile Picture */}
+              <div className="relative w-20 h-20 -mt-10 mb-4 rounded-xl border-4 border-card bg-muted flex items-center justify-center overflow-hidden shadow-lg group">
+                {user?.profile_picture ? (
+                  <img src={user.profile_picture} className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full bg-gradient-to-br from-blue-500 to-violet-500 flex items-center justify-center text-white font-bold text-2xl">
+                    {(user?.name || user?.whitelabel || 'A')[0]}
+                  </div>
+                )}
+                <label className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer transition">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+                  <input type="file" accept="image/*" className="hidden" onChange={(e) => handleImageUpload(e, 'profile_picture')} />
+                </label>
+              </div>
+
+              <div className="flex justify-between items-start">
+                <div>
+                  <h3 className="text-xl font-bold">{user?.name || 'Client User'}</h3>
+                  <p className="text-sm text-muted-foreground">{user?.whitelabel || 'Azlon AI Business'}</p>
+                </div>
+                <div className="flex items-center gap-2 bg-muted px-3 py-1.5 rounded-full">
+                  <span className={`w-2 h-2 rounded-full ${isLockedOut ? 'bg-red-500' : agentEnabled ? 'bg-emerald-500' : 'bg-red-400'}`} />
+                  <span className="text-xs font-semibold">{isLockedOut ? 'Exhausted' : agentEnabled ? 'Active' : 'Paused'}</span>
+                </div>
+              </div>
+
+              <div className="mt-6 space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-sidebar border border-border p-3 rounded-xl">
+                    <div className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider mb-1">Active Agents</div>
+                    <div className="text-lg font-black">{agentEnabled ? '1' : '0'} <span className="text-xs text-muted-foreground font-medium">Inbound</span></div>
+                  </div>
+                  <div className="bg-sidebar border border-border p-3 rounded-xl">
+                    <div className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider mb-1">Billing Date</div>
+                    <div className="text-sm font-black">{user?.billing_date ? new Date(user.billing_date).toLocaleDateString() : 'N/A'}</div>
+                  </div>
+                </div>
+
+                <div className="bg-sidebar border border-border p-3 rounded-xl">
+                  <div className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider mb-1">Client ID</div>
+                  <div className="flex items-center justify-between">
+                    <code className="text-xs font-mono">{user?.client_code || user?.clientCode}</code>
+                    <button onClick={() => { navigator.clipboard.writeText(user?.client_code || user?.clientCode); showToast('Copied ID', 'success'); }} className="text-blue-500 hover:text-blue-400 text-xs font-semibold">Copy</button>
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t border-border">
+                  <button 
+                    onClick={() => handleForceResetPassword(user?.id)}
+                    className="w-full bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition py-2.5 rounded-xl text-sm font-bold border border-red-500/20 hover:border-red-500"
+                  >
+                    Force Reset Password
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}
