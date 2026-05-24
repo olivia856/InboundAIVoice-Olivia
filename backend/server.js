@@ -1019,26 +1019,36 @@ app.post('/api/twilio/inbound', async (req, res) => {
 // Outbound trigger endpoint (For the React Dashboard)
 app.post('/api/calls/outbound', async (req, res) => {
     try {
-        const { toPhone, systemPrompt, voice, goal, name, client_id } = req.body;
+        let { toPhone, systemPrompt, voice, goal, name, client_id } = req.body;
+        if (!client_id || client_id === 'undefined' || client_id === 'null') {
+            client_id = null;
+        }
+
         if (!toPhone) return res.status(400).json({ error: "Missing toPhone parameter." });
         
         console.log(`Initiating Outbound Call to: ${toPhone}`);
 
         // 1. Check Twilio Credentials & Agent Status
-        const { data: client } = await supabase.from('clients').select('agent_enabled, plan, mins_used').eq('id', client_id).maybeSingle();
-        if (client) {
-            if (client.agent_enabled === false) {
-                return res.status(400).json({ error: "AI Agent is currently paused. Please enable it in the dashboard to make outbound calls." });
-            }
-            const planLimits = { Starter: 500, Pro: 2000, Business: 5000, Enterprise: null };
-            const planKey = (client.plan || 'Starter').split(' ')[0];
-            const limit = planLimits[planKey] ?? null;
-            if (limit !== null && (client.mins_used || 0) >= limit) {
-                return res.status(400).json({ error: "Plan limit exhausted. Please upgrade your plan to resume outbound calls." });
+        if (client_id) {
+            const { data: client } = await supabase.from('clients').select('agent_enabled, plan, mins_used').eq('client_code', client_id).maybeSingle();
+            if (client) {
+                if (client.agent_enabled === false) {
+                    return res.status(400).json({ error: "AI Agent is currently paused. Please enable it in the dashboard to make outbound calls." });
+                }
+                const planLimits = { Starter: 500, Pro: 2000, Business: 5000, Enterprise: null };
+                const planKey = (client.plan || 'Starter').split(' ')[0];
+                const limit = planLimits[planKey] ?? null;
+                if (limit !== null && (client.mins_used || 0) >= limit) {
+                    return res.status(400).json({ error: "Plan limit exhausted. Please upgrade your plan to resume outbound calls." });
+                }
             }
         }
 
-        const { data: twInt } = await supabase.from('integrations').select('*').eq('provider', 'twilio').eq('client_id', client_id).single();
+        const queryTw = supabase.from('integrations').select('*').eq('provider', 'twilio');
+        if (client_id) queryTw.eq('client_id', client_id);
+        else queryTw.is('client_id', null);
+        
+        const { data: twInt } = await queryTw.maybeSingle();
         const TWILIO_SID = (twInt?.meta_data?.sid || process.env.TWILIO_ACCOUNT_SID)?.trim();
         const TWILIO_AUTH = (twInt?.api_key || process.env.TWILIO_AUTH_TOKEN)?.trim();
         const TWILIO_PHONE = (twInt?.meta_data?.phone || process.env.TWILIO_PHONE_NUMBER)?.trim();
@@ -1118,14 +1128,20 @@ app.post('/api/calls/outbound', async (req, res) => {
 // Twilio Webhook (Hit exactly when the user presses the key on a trial account, or instantly on full accounts)
 app.post('/api/twilio/outbound-twiml', async (req, res) => {
     try {
-        const { toPhone, voice: reqVoice, goal: reqGoal, name: reqName, client_id } = req.query;
+        let { toPhone, voice: reqVoice, goal: reqGoal, name: reqName, client_id } = req.query;
+        if (client_id === 'undefined' || client_id === 'null' || !client_id) {
+            client_id = null;
+        }
         const clientId = client_id;
         const callSid = req.body.CallSid || req.query.CallSid || '';
 
         // 1. Determine key and base URL
         let ACTIVE_ULTRAVOX_KEY = process.env.ULTRAVOX_API_KEY;
         try {
-            const { data: clientUV2 } = await supabase.from('integrations').select('*').eq('provider', 'ultravox').eq('client_id', client_id).maybeSingle();
+            const queryUV = supabase.from('integrations').select('*').eq('provider', 'ultravox');
+            if (client_id) queryUV.eq('client_id', client_id);
+            else queryUV.is('client_id', null);
+            const { data: clientUV2 } = await queryUV.maybeSingle();
             const platformUV2 = await getPlatformKey('ultravox');
             ACTIVE_ULTRAVOX_KEY = clientUV2?.api_key || platformUV2?.api_key || ACTIVE_ULTRAVOX_KEY;
         } catch (dbErr) {
@@ -1140,7 +1156,11 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
 
         // 1. Resolve Client & Prompt settings
         const { data: clientRow } = client_id ? await supabase.from('clients').select('name').eq('client_code', client_id).maybeSingle() : { data: null };
-        const { data: agentData } = client_id ? await supabase.from('agent_settings').select('*').eq('client_id', client_id).limit(1).maybeSingle() : { data: null };
+        
+        const agentQuery = supabase.from('agent_settings').select('*').limit(1);
+        if (client_id) agentQuery.eq('client_id', client_id);
+        else agentQuery.is('client_id', null);
+        const { data: agentData } = await agentQuery.maybeSingle();
         
         console.log(`[Twilio Outbound] Generating TwiML for client: ${client_id || 'NONE'}`);
 
@@ -1776,12 +1796,16 @@ app.get('/api/ultravox/proxy-agent/:id', async (req, res) => {
 // POST Agent Settings from Dashboard (Saving updates!)
 app.post('/api/agent', async (req, res) => {
     try {
-        const { 
+        let { 
             client_id, system_prompt, voice_preset, temperature, 
             personality, greeting_message,
             working_days, open_time, close_time, non_working_dates,
             tools_config, campaign_goal, ultravox_agent_id, outbound_agent_id
         } = req.body;
+
+        if (client_id === 'undefined' || client_id === 'null' || !client_id) {
+            client_id = null;
+        }
         
         const updateData = {
             client_id, system_prompt, voice_preset, temperature, 
@@ -1792,7 +1816,11 @@ app.post('/api/agent', async (req, res) => {
         if (req.body.record_calls !== undefined) updateData.record_calls = req.body.record_calls;
         if (campaign_goal !== undefined) updateData.campaign_goal = campaign_goal;
         
-        const { data: existing, error: findErr } = await supabase.from('agent_settings').select('id').eq('client_id', client_id).limit(1).maybeSingle();
+        const agentQuery = supabase.from('agent_settings').select('id').limit(1);
+        if (client_id) agentQuery.eq('client_id', client_id);
+        else agentQuery.is('client_id', null);
+        
+        const { data: existing, error: findErr } = await agentQuery.maybeSingle();
         if (findErr) throw findErr;
         
         let result;
