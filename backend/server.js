@@ -1746,6 +1746,17 @@ app.get('/api/agent', async (req, res) => {
 app.get('/api/ultravox/proxy-agent/:id', async (req, res) => {
     try {
         const { id } = req.params;
+        const { client_id } = req.query;
+        let ACTIVE_ULTRAVOX_KEY = process.env.ULTRAVOX_API_KEY;
+        if (client_id) {
+            const { data: clientUV } = await supabase.from('integrations').select('*').eq('provider', 'ultravox').eq('client_id', client_id).maybeSingle();
+            const platformUV = await getPlatformKey('ultravox');
+            ACTIVE_ULTRAVOX_KEY = clientUV?.api_key || platformUV?.api_key || ACTIVE_ULTRAVOX_KEY;
+        } else {
+            const platformUV = await getPlatformKey('ultravox');
+            ACTIVE_ULTRAVOX_KEY = platformUV?.api_key || ACTIVE_ULTRAVOX_KEY;
+        }
+
         const uvRes = await fetch(`https://api.ultravox.ai/api/agents/${id}`, {
             headers: { 'X-API-Key': ACTIVE_ULTRAVOX_KEY }
         });

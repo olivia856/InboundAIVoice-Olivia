@@ -1274,7 +1274,8 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                           if(!val) return;
                           try {
                             showToast('Syncing config...', 'success');
-                            const res = await fetch(`${API_BASE}/api/ultravox/proxy-agent/${val}`);
+                            const cid = user?.client_code || user?.clientCode || '';
+                            const res = await fetch(`${API_BASE}/api/ultravox/proxy-agent/${val}?client_id=${cid}`);
                             const data = await res.json();
                             if(data.success) {
                               if(data.agent.systemPrompt) document.getElementsByName('prompt')[0].value = data.agent.systemPrompt;
