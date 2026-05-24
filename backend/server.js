@@ -1761,12 +1761,15 @@ app.get('/api/ultravox/proxy-agent/:id', async (req, res) => {
             headers: { 'X-API-Key': ACTIVE_ULTRAVOX_KEY }
         });
         if (!uvRes.ok) {
-            return res.status(uvRes.status).json({ error: "Failed to fetch from Ultravox" });
+            const errorText = await uvRes.text().catch(()=>'');
+            console.error(`[PROXY] Failed to fetch agent ${id}. Status: ${uvRes.status}. Error: ${errorText}`);
+            return res.status(uvRes.status).json({ error: `Ultravox API Error: ${uvRes.status} ${uvRes.statusText}` });
         }
         const data = await uvRes.json();
         res.json({ success: true, agent: data });
     } catch (e) {
-        res.status(500).json({ error: "Server error fetching proxy" });
+        console.error("[PROXY] Server error:", e);
+        res.status(500).json({ error: `Server error: ${e.message}` });
     }
 });
 

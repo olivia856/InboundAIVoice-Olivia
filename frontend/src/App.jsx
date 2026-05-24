@@ -1303,7 +1303,7 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
 
                               showToast('Config synced!', 'success');
                             } else {
-                              showToast('Failed to sync', 'error');
+                              showToast(data.error || 'Failed to sync', 'error');
                             }
                           } catch(e) { showToast('Network Error', 'error'); }
                         }} className="bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded-lg text-xs font-bold transition">Sync</button>
