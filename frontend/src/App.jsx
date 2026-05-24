@@ -237,6 +237,7 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
   const [manualLeadModal, setManualLeadModal] = useState(false);
   const [newLead, setNewLead] = useState({ name: '', phone: '', email: '', ai_context: '', segment: 'Warm' });
   const [campaignGoal, setCampaignGoal] = useState('');
+  const [outboundAgentId, setOutboundAgentId] = useState('');
   const [logSentimentFilter, setLogSentimentFilter] = useState('All');
   const [logDateFilter, setLogDateFilter] = useState({ from: '', to: '' });
   const [kbTab, setKbTab] = useState('text'); // 'text' | 'file' | 'url'
@@ -258,6 +259,17 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
     }, 1000);
     return () => clearTimeout(handler);
   }, [campaignGoal]);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      const clientId = user?.client_code || user?.clientCode;
+      if (clientId && outboundAgentId !== agentSettings?.outbound_agent_id) {
+        fetch(`${API_BASE}/api/agent/outbound-id`, { method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ client_id: clientId, outbound_agent_id: outboundAgentId }) });
+        setAgentSettings(prev => prev ? { ...prev, outbound_agent_id: outboundAgentId } : prev);
+      }
+    }, 1000);
+    return () => clearTimeout(handler);
+  }, [outboundAgentId]);
 
   const saveManualLead = async (e) => {
     e.preventDefault();
@@ -335,7 +347,17 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
     fetch(`${API_BASE}/api/leads${query}`).then(r => r.json()).then(d => { if (d?.success) setLeads(d.leads); }).catch(() => {});
     fetch(`${API_BASE}/api/knowledge_base${query}`).then(r => r.json()).then(d => { if (d?.success) setKnowledgeBase(d.docs); }).catch(() => {});
     fetch(`${API_BASE}/api/campaigns${query}`).then(r => r.json()).then(d => { if (d?.success) setCampaigns(d.campaigns); }).catch(() => {});
-    fetch(`${API_BASE}/api/agent${query}`).then(r => r.json()).then(d => { if (d.success && d.agent) { setAgentSettings(d.agent); if (d.agent.campaign_goal && !document.getElementById('campaign_goal')?.matches(':focus')) setCampaignGoal(d.agent.campaign_goal); } }).catch(() => {});
+    fetch(`${API_BASE}/api/agent${query}`).then(r => r.json()).then(d => { 
+      if (d.success && d.agent) { 
+        setAgentSettings(d.agent); 
+        if (d.agent.campaign_goal && !document.getElementById('campaign_goal')?.matches(':focus')) {
+          setCampaignGoal(d.agent.campaign_goal);
+        }
+        if (d.agent.outbound_agent_id && !document.getElementById('outbound_agent_id')?.matches(':focus')) {
+          setOutboundAgentId(d.agent.outbound_agent_id);
+        }
+      } 
+    }).catch(() => {});
     fetch(`${API_BASE}/api/integrations${query}`).then(r => r.json()).then(d => { if (d.success) setIntegrations(d.integrations || []); }).catch(() => {});
     fetch(`${API_BASE}/api/appointments${query}`).then(r => r.json()).then(d => { if (d.success) setAppointments(d.appointments || []); }).catch(() => {});
     fetch(`${API_BASE}/api/reports${query}&date_filter=${reportDateRange}`).then(r => r.json()).then(d => { if (d.success) setReports(d.metrics); }).catch(() => {});
@@ -702,7 +724,7 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
               {[
                 { label: 'Total Calls', value: callLogs.filter(c => { const d = new Date(c.created_at); const n = new Date(); return d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear(); }).length, sub: 'This month', color: 'from-violet-500/10 to-indigo-500/10', accent: 'text-violet-400' },
                 { label: 'Appointments', value: reports?.bookedAppointments || appointments.length, sub: 'Booked by AI', color: 'from-emerald-500/10 to-teal-500/10', accent: 'text-emerald-400' },
-                { label: 'Active Contacts', value: new Set(callLogs.filter(c => c.from_phone || c.to_phone).map(c => c.direction === 'inbound' ? c.from_phone : c.to_phone)).size, sub: 'Unique Callers', color: 'from-blue-500/10 to-cyan-500/10', accent: 'text-blue-400' },
+                { label: 'Active Contacts', value: new Set([...callLogs.filter(c => c.from_phone || c.to_phone).map(c => c.direction === 'inbound' ? c.from_phone : c.to_phone), ...leads.map(l => l.phone).filter(Boolean)]).size, sub: 'Unique Callers', color: 'from-blue-500/10 to-cyan-500/10', accent: 'text-blue-400' },
                 { label: 'Completed', value: reports?.hourlyVolume ? reports.hourlyVolume.reduce((acc, h) => acc + h.count, 0) : callLogs.filter(c => c.status === 'completed').length, sub: 'Finished calls', color: 'from-amber-500/10 to-orange-500/10', accent: 'text-amber-400' }
               ].map((stat, i) => (
                 <div key={i} className={`stat-card bg-gradient-to-br ${stat.color} border border-border rounded-2xl p-6`}>
@@ -1239,14 +1261,14 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                   <div>
                     <label className="block text-xs font-bold text-muted-foreground uppercase mb-2">Agent Greeting Message</label>
-                    <input name="greeting" defaultValue={agentSettings.greeting_message} placeholder="Hello, thanks for calling! How can I help you today?" className="w-full bg-background border border-border rounded-lg p-3 text-sm outline-none" required disabled={user?.role !== 'superadmin'} />
+                    <input name="greeting" defaultValue={agentSettings.greeting_message} placeholder="Hello, thanks for calling! How can I help you today?" className="w-full bg-background border border-border rounded-lg p-3 text-sm outline-none" required disabled={!onBackToAdmin} />
                     <p className="text-[10px] text-muted-foreground mt-1">The first thing the AI will say when answering.</p>
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-muted-foreground uppercase mb-2">Agent ID (Optional)</label>
                     <div className="flex gap-2">
-                      <input id="inbound_agent_id_input" name="ultravox_agent_id" defaultValue={agentSettings.ultravox_agent_id} placeholder="e.g. 1a2b3c4d-5e6f..." className="flex-1 bg-background border border-border rounded-lg p-3 text-sm outline-none" disabled={user?.role !== 'superadmin'} />
-                      {user?.role === 'superadmin' && (
+                      <input id="inbound_agent_id_input" name="ultravox_agent_id" defaultValue={agentSettings.ultravox_agent_id} placeholder="e.g. 1a2b3c4d-5e6f..." className="flex-1 bg-background border border-border rounded-lg p-3 text-sm outline-none" disabled={!onBackToAdmin} />
+                      {!!onBackToAdmin && (
                         <button type="button" onClick={async () => {
                           const val = document.getElementById('inbound_agent_id_input').value;
                           if(!val) return;
@@ -1257,6 +1279,27 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                             if(data.success) {
                               if(data.agent.systemPrompt) document.getElementsByName('prompt')[0].value = data.agent.systemPrompt;
                               if(data.agent.voice) document.getElementsByName('voice')[0].value = data.agent.voice;
+                              if(data.agent.temperature !== undefined) document.getElementsByName('temp')[0].value = data.agent.temperature;
+                              if(data.agent.firstSpeaker === 'AGENT') {
+                                // Usually if firstSpeaker is AGENT, there's a greeting somewhere, though UV doesn't store greeting directly in agent.
+                                // We just set tools
+                              }
+                              
+                              if(data.agent.tools && Array.isArray(data.agent.tools)) {
+                                 const toolNames = data.agent.tools.map(t => typeof t === 'string' ? t : t.toolName);
+                                 setAgentSettings(prev => ({
+                                   ...prev,
+                                   tools_config: {
+                                      ...prev.tools_config,
+                                      hangUp: toolNames.includes('hangUp'),
+                                      transferCall: toolNames.includes('transferCall'),
+                                      queryCorpus: toolNames.includes('queryCorpus'),
+                                      leaveVoicemail: toolNames.includes('leaveVoicemail'),
+                                      playDtmfSounds: toolNames.includes('playDtmfSounds')
+                                   }
+                                 }));
+                              }
+
                               showToast('Config synced!', 'success');
                             } else {
                               showToast('Failed to sync', 'error');
@@ -1269,7 +1312,7 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                   </div>
                   <div>
                      <label className="block text-xs font-bold text-muted-foreground uppercase mb-2">Personality & Tone</label>
-                     <select name="personality" defaultValue={agentSettings.personality || 'professional'} className="w-full bg-background border border-border rounded-lg p-3 text-sm outline-none" disabled={user?.role !== 'superadmin'}>
+                     <select name="personality" defaultValue={agentSettings.personality || 'professional'} className="w-full bg-background border border-border rounded-lg p-3 text-sm outline-none" disabled={!onBackToAdmin}>
                        <option value="professional">Professional & Helpful Support</option>
                        <option value="warm">Warm & Empathetic</option>
                        <option value="sales">Aggressive Sales Closer</option>
@@ -1281,12 +1324,12 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
 
                 <h3 className="font-semibold text-sm mb-3 border-b border-border pb-3">Advanced System Instructions</h3>
                 <p className="text-xs text-muted-foreground mb-3">Defines the specific guardrails and logic of the agent. (Do not put Knowledge Base text here, use the Knowledge Base tab instead).</p>
-                <textarea name="prompt" defaultValue={agentSettings.system_prompt} className="w-full bg-background border border-border rounded-lg p-4 font-mono text-[13px] outline-none resize-none h-[150px] mb-6 disabled:opacity-50" placeholder="You are the smart AI agent..." required disabled={user?.role !== 'superadmin'} />
+                <textarea name="prompt" defaultValue={agentSettings.system_prompt} className="w-full bg-background border border-border rounded-lg p-4 font-mono text-[13px] outline-none resize-none h-[150px] mb-6 disabled:opacity-50" placeholder="You are the smart AI agent..." required disabled={!onBackToAdmin} />
                 
                 <div className="grid grid-cols-2 gap-6">
                   <div>
                     <label className="block text-xs font-bold text-muted-foreground uppercase mb-2">Voice Model</label>
-                    <select name="voice" defaultValue={agentSettings.voice_preset} className="w-full bg-background border border-border rounded-lg p-3 text-sm outline-none" disabled={user?.role !== 'superadmin'}>
+                    <select name="voice" defaultValue={agentSettings.voice_preset} className="w-full bg-background border border-border rounded-lg p-3 text-sm outline-none" disabled={!onBackToAdmin}>
                       <optgroup label="AI Voices">
                         <option value="9ed99f35-ddd5-4efb-9c62-9ce9483bab61">🇺🇸 Mark (Male, Professional)</option>
                         <option value="79a125e8-cd45-4c13-8a67-188112f4dd22">🇺🇸 Terrence (Male, Deep)</option>
@@ -1306,7 +1349,7 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-muted-foreground uppercase mb-2">Creativity (Temp)</label>
-                    <input name="temp" type="number" step="0.1" max="1" min="0" defaultValue={agentSettings.temperature} className="w-full bg-background border border-border rounded-lg p-3 text-sm outline-none" disabled={user?.role !== 'superadmin'} />
+                    <input name="temp" type="number" step="0.1" max="1" min="0" defaultValue={agentSettings.temperature} className="w-full bg-background border border-border rounded-lg p-3 text-sm outline-none" disabled={!onBackToAdmin} />
                   </div>
                 </div>
                 <div className="mt-8 flex justify-end pt-4 border-t border-border">
@@ -1457,7 +1500,7 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
               <h2 className="text-3xl font-extrabold tracking-tight">Call Logs & Telemetry</h2>
                <div className="flex items-center gap-3">
                  <div className="flex bg-card border border-border rounded-xl p-1 gap-1">
-                   {['All', 'Interested', 'Not Interested', 'Follow-Up', 'Booked', 'Enquiry'].map(f => (
+                   {['All', 'Positive', 'Neutral', 'Negative'].map(f => (
                      <button key={f} onClick={() => setLogSentimentFilter(f)} className={cn("px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider transition", logSentimentFilter === f ? "bg-primary text-white" : "text-muted-foreground hover:bg-white/5")}>{f}</button>
                    ))}
                  </div>
@@ -1517,12 +1560,7 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                     {callLogs.filter(c => {
                       if (logSentimentFilter !== 'All') {
                         const cat = (c.sentiment_category || 'Neutral').toLowerCase();
-                        const stat = (c.call_status || '').toLowerCase();
-                        if (logSentimentFilter === 'Interested' && cat !== 'positive') return false;
-                        if (logSentimentFilter === 'Not Interested' && cat !== 'negative') return false;
-                        if (logSentimentFilter === 'Booked' && !stat.includes('booked')) return false;
-                        if (logSentimentFilter === 'Follow-Up' && !stat.includes('follow')) return false;
-                        if (logSentimentFilter === 'Enquiry' && cat !== 'neutral') return false;
+                        if (logSentimentFilter.toLowerCase() !== cat) return false;
                       }
                       if (logDateFilter.from) {
                         if (new Date(c.created_at) < new Date(logDateFilter.from)) return false;
@@ -2039,6 +2077,23 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                   }}
                   placeholder="What is the objective of this outbound call? e.g. 'Get them to book a viewing for next week.'" 
                   className="w-full bg-background border border-border p-3 rounded-lg text-sm outline-none h-20 resize-none focus:border-primary transition-colors"></textarea>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">Outbound Agent ID <span className="text-muted-foreground/50 normal-case font-normal">(Optional - auto-saved)</span></label>
+                <input id="outbound_agent_id" value={outboundAgentId} onChange={e => setOutboundAgentId(e.target.value)}
+                  onBlur={async (e) => {
+                    const clientId = user?.client_code || user?.clientCode;
+                    if (!clientId) return;
+                    await fetch(`${API_BASE}/api/agent/outbound-id`, { method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ client_id: clientId, outbound_agent_id: e.target.value }) });
+                    setAgentSettings(prev => prev ? { ...prev, outbound_agent_id: e.target.value } : prev);
+                    showToast('Outbound Agent ID saved!', 'success');
+                  }}
+                  placeholder="e.g. 1a2b3c4d-5e6f..."
+                  className="w-full bg-background border border-border rounded-lg p-3 text-sm outline-none" 
+                  disabled={!onBackToAdmin}
+                />
+                <p className="text-[10px] text-muted-foreground mt-1">If set, outbound calls will use this specific Ultravox agent.</p>
               </div>
 
               <div className="grid grid-cols-2 gap-4 pt-2">
@@ -2658,7 +2713,7 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
               <div className="flex justify-between items-start">
                 <div>
                   <h3 className="text-xl font-bold">{user?.name || 'Client User'}</h3>
-                  <p className="text-sm text-muted-foreground">{user?.whitelabel || 'Azlon AI Business'}</p>
+                  <p className="text-sm text-muted-foreground">{user?.whitelabel || user?.business_name || 'Azlon AI Business'} {user?.business_type ? `• ${user.business_type}` : ''}</p>
                 </div>
                 <div className="flex items-center gap-2 bg-muted px-3 py-1.5 rounded-full">
                   <span className={`w-2 h-2 rounded-full ${isLockedOut ? 'bg-red-500' : agentEnabled ? 'bg-emerald-500' : 'bg-red-400'}`} />
@@ -2669,20 +2724,29 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
               <div className="mt-6 space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="bg-sidebar border border-border p-3 rounded-xl">
+                    <div className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider mb-1">Email Address</div>
+                    <div className="text-sm font-semibold truncate">{user?.email || 'N/A'}</div>
+                  </div>
+                  <div className="bg-sidebar border border-border p-3 rounded-xl">
+                    <div className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider mb-1">Phone Number</div>
+                    <div className="text-sm font-semibold">{user?.phone || 'N/A'}</div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="bg-sidebar border border-border p-3 rounded-xl">
                     <div className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider mb-1">Active Agents</div>
                     <div className="text-lg font-black">{agentEnabled ? '1' : '0'} <span className="text-xs text-muted-foreground font-medium">Inbound</span></div>
                   </div>
                   <div className="bg-sidebar border border-border p-3 rounded-xl">
-                    <div className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider mb-1">Billing Date</div>
-                    <div className="text-sm font-black">{user?.billing_date ? new Date(user.billing_date).toLocaleDateString() : 'N/A'}</div>
+                    <div className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider mb-1">Current Plan</div>
+                    <div className="text-sm font-black capitalize">{user?.plan || 'Free'}</div>
                   </div>
-                </div>
-
-                <div className="bg-sidebar border border-border p-3 rounded-xl">
-                  <div className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider mb-1">Client ID</div>
-                  <div className="flex items-center justify-between">
-                    <code className="text-xs font-mono">{user?.client_code || user?.clientCode}</code>
-                    <button onClick={() => { navigator.clipboard.writeText(user?.client_code || user?.clientCode); showToast('Copied ID', 'success'); }} className="text-blue-500 hover:text-blue-400 text-xs font-semibold">Copy</button>
+                  <div className="bg-sidebar border border-border p-3 rounded-xl">
+                    <div className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider mb-1">Next Billing</div>
+                    <div className="text-sm font-black">
+                      {user?.billing_date ? new Date(user.billing_date).toLocaleDateString() : (() => { const d = new Date(); d.setMonth(d.getMonth() + 1); return d.toLocaleDateString(); })()}
+                    </div>
                   </div>
                 </div>
 

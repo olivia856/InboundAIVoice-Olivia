@@ -391,7 +391,8 @@ app.put('/api/clients/:id', async (req, res) => {
     try {
         const { id } = req.params;
         const updateData = req.body;
-        const { data, error } = await supabase.from('clients').update(updateData).eq('id', id).select();
+        const isUuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(id);
+        const { data, error } = await supabase.from('clients').update(updateData).eq(isUuid ? 'id' : 'client_code', id).select();
         if (error) throw error;
         res.json({ success: true, client: data[0] });
     } catch (err) {
@@ -923,8 +924,8 @@ app.post('/api/twilio/inbound', async (req, res) => {
             maxDuration: '1800s'
         };
 
-        if (agentData?.ultravox_agent_id && agentData.ultravox_agent_id.trim() !== '') {
-            ultravoxUrl = `https://api.ultravox.ai/api/agents/${agentData.ultravox_agent_id.trim()}/calls`;
+        if (agentData?.outbound_agent_id && agentData.outbound_agent_id.trim() !== '') {
+            ultravoxUrl = `https://api.ultravox.ai/api/agents/${agentData.outbound_agent_id.trim()}/calls`;
             delete uvPayloadConfig.systemPrompt;
             delete uvPayloadConfig.voice;
             delete uvPayloadConfig.temperature;
@@ -1819,6 +1820,23 @@ app.patch('/api/agent/campaign-goal', async (req, res) => {
     } catch(err) { res.status(500).json({ error: 'Failed to save campaign goal' }); }
 });
 
+// --- DEDICATED: Save outbound agent id only ---
+app.patch('/api/agent/outbound-id', async (req, res) => {
+    try {
+        const { client_id, outbound_agent_id } = req.body;
+        if (!client_id) return res.status(400).json({ error: 'client_id required' });
+        const { data: existing } = await supabase.from('agent_settings').select('id').eq('client_id', client_id).limit(1).maybeSingle();
+        if (existing?.id) {
+            await supabase.from('agent_settings').update({ outbound_agent_id }).eq('id', existing.id);
+        } else {
+            await supabase.from('agent_settings').insert([{ client_id, outbound_agent_id }]);
+        }
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: "Could not save outbound id." });
+    }
+});
+
 // Twilio Call Status Webhook (Hangs up, fetches Summary from Ultravox!)
 app.post('/api/twilio/status/:client_id?', async (req, res) => {
     let client_id = req.params.client_id || req.body.client_id || "";
@@ -1888,6 +1906,10 @@ app.post('/api/twilio/status/:client_id?', async (req, res) => {
                     finalSentiment = mappedReason;
                     console.log(`[SENTIMENT] Keyword fallback → ${mappedReason} for ${callSid}.`);
                 }
+
+                // Strict Enforcement for Dashboard
+                if (!['Positive', 'Negative', 'Neutral'].includes(finalCategory)) finalCategory = mappedReason;
+                if (!['Positive', 'Negative', 'Neutral'].includes(finalSentiment)) finalSentiment = mappedReason;
 
                 await supabase.from('calls').update({
                     status: 'completed',
