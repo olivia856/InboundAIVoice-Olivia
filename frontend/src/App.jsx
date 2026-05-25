@@ -66,10 +66,12 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
   const [twilioConfig, setTwilioConfig] = useState({ sid: '', api_key: '', phone: '', transfer_number: '' });
   const [uvConfig, setUVConfig] = useState({ api_key: '' });
   const [elevenLabsConfig, setElevenLabsConfig] = useState({ api_key: '', voice_id: '' });
+  const [corpusConfig, setCorpusConfig] = useState({ api_key: '' });
   const [resendConfig, setResendConfig] = useState({ api_key: '' });
   const [isSavingCreds, setIsSavingCreds] = useState(false);
   const [isSavingUV, setIsSavingUV] = useState(false);
   const [isSavingElevenLabs, setIsSavingElevenLabs] = useState(false);
+  const [isSavingCorpus, setIsSavingCorpus] = useState(false);
   const [isSavingResend, setIsSavingResend] = useState(false);
 
   const fetchTwilioConfig = async () => {
@@ -98,12 +100,28 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
 
   const fetchElevenLabsConfig = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/integrations/elevenlabs?client_id=${(user?.client_code || user?.clientCode)}`);
+      const res = await fetch(`${API_BASE}/api/integrations?client_id=${user?.client_code || user?.clientCode}`);
       const data = await res.json();
-      if (data.success && data.integration) {
-        setElevenLabsConfig({ api_key: data.integration.api_key, voice_id: data.integration.meta_data?.voice_id || '' });
+      if (data.success && data.integrations) {
+        const elevenlabs = data.integrations.find(i => i.provider === 'elevenlabs');
+        if (elevenlabs) {
+          setElevenLabsConfig({ api_key: elevenlabs.api_key, voice_id: elevenlabs.meta_data?.voice_id || '' });
+        }
       }
-    } catch (e) { }
+    } catch (e) { console.error(e); }
+  };
+
+  const fetchCorpusConfig = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/integrations?client_id=${user?.client_code || user?.clientCode}`);
+      const data = await res.json();
+      if (data.success && data.integrations) {
+        const corpus = data.integrations.find(i => i.provider === 'ultravox_corpus');
+        if (corpus) {
+          setCorpusConfig({ api_key: corpus.api_key });
+        }
+      }
+    } catch (e) { console.error(e); }
   };
 
 
@@ -111,8 +129,9 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
     if (activePage === 'credentials') {
       fetchTwilioConfig();
       fetchUVConfig();
-      fetchElevenLabsConfig();
       fetchResendConfig();
+      fetchElevenLabsConfig();
+      fetchCorpusConfig();
     }
   }, [activePage]);
 
@@ -210,6 +229,25 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
       if (data.success) { showToast('ElevenLabs integration saved!', 'success'); } else { showToast('Failed to save ElevenLabs.', 'error'); }
     } catch (e) { showToast('Error saving ElevenLabs.', 'error'); }
     setIsSavingElevenLabs(false);
+  };
+
+  const saveCorpusConfig = async (e) => {
+    e.preventDefault();
+    setIsSavingCorpus(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/integrations`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          provider: 'ultravox_corpus',
+          api_key: corpusConfig.api_key, 
+          client_id: (user?.client_code || user?.clientCode) 
+        })
+      });
+      const data = await res.json();
+      if (data.success) { showToast('Corpus API Key saved!', 'success'); } else { showToast('Failed to save Corpus Key.', 'error'); }
+    } catch (e) { showToast('Error saving Corpus Key.', 'error'); }
+    setIsSavingCorpus(false);
   };
   const [theme, setTheme] = useState('light');
   const [toast, setToast] = useState(null);
@@ -1904,7 +1942,11 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                       formData.append('file', corpusFile);
                       formData.append('title', corpusFile.name);
                       try {
-                        const res = await fetch(`${API_BASE}/api/corpora/upload`, { method: 'POST', body: formData });
+                        const res = await fetch(`${API_BASE}/api/corpora/upload`, { 
+                            method: 'POST', 
+                            body: formData,
+                            headers: { 'x-client-id': (user?.client_code || user?.clientCode || '') }
+                        });
                         const d = await res.json();
                         if (d.success) { showToast('File added to AI Knowledge Base!', 'success'); setCorpusFile(null); }
                         else showToast(d.error || 'Upload failed', 'error');
@@ -1924,7 +1966,14 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                   <button onClick={async () => {
                     if (!corpusUrl || !corpusUrl.startsWith('http')) { showToast('Enter a valid https:// URL', 'error'); return; }
                     try {
-                      const res = await fetch(`${API_BASE}/api/corpora/add-url`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ url: corpusUrl }) });
+                      const res = await fetch(`${API_BASE}/api/corpora/add-url`, { 
+                          method: 'POST', 
+                          headers: {
+                              'Content-Type': 'application/json',
+                              'x-client-id': (user?.client_code || user?.clientCode || '')
+                          }, 
+                          body: JSON.stringify({ url: corpusUrl }) 
+                      });
                       const d = await res.json();
                       if (d.success) { showToast('URL added!', 'success'); setCorpusUrl(''); }
                       else showToast(d.error || 'Failed', 'error');
@@ -2223,8 +2272,6 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                           if (data.success) {
                             showToast(data.message, 'success');
                             fetchAll();
-                            if (campaignNameEl) campaignNameEl.value = '';
-                            document.getElementById('gsheet_url').value = '';
                           } else {
                             showToast(data.error || 'Google Sheet import failed.', 'error');
                           }
@@ -2453,6 +2500,27 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                 <div className="pt-2">
                   <button type="submit" disabled={isSavingElevenLabs} className="w-full bg-gray-500/10 hover:bg-gray-500/20 text-gray-700 dark:text-gray-300 border border-gray-500/30 font-bold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2">
                     {isSavingElevenLabs ? 'Saving...' : 'Update ElevenLabs Keys'}
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            {/* --- CORPUS CONFIG --- */}
+            <div className="bg-card border border-border rounded-2xl p-8 shadow-premium-lg">
+              <h3 className="text-sm font-bold uppercase tracking-widest mb-6 flex items-center gap-2">
+                <Database size={16} className="text-primary" /> Knowledge Base & RAG Corpus
+              </h3>
+              <p className="text-xs text-muted-foreground mb-5 leading-relaxed">
+                Enter your Ultravox Corpus API Key to allow file uploads (PDF, Word) and URLs into your AI Agent's Knowledge Base.
+              </p>
+              <form onSubmit={saveCorpusConfig} className="space-y-5">
+                <div>
+                  <label className="block text-[10px] font-bold text-muted-foreground uppercase tracking-ultra mb-2">Ultravox Corpus API Key</label>
+                  <input type="password" value={corpusConfig.api_key} onChange={(e) => setCorpusConfig({...corpusConfig, api_key: e.target.value})} placeholder="sk_..." className="w-full bg-background border border-border p-3 rounded-xl text-sm outline-none focus:border-primary transition-all font-mono" />
+                </div>
+                <div className="pt-2">
+                  <button type="submit" disabled={isSavingCorpus} className="w-full bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 font-bold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2">
+                    {isSavingCorpus ? 'Saving...' : 'Update Corpus Key'}
                   </button>
                 </div>
               </form>

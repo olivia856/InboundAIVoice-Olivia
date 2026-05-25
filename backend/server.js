@@ -1302,15 +1302,26 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
             if (leadSegment) finalPrompt += `\n- Lead Category/Segment: ${leadSegment}.`;
             if (leadHistory) {
                 finalPrompt += `\n- Past interaction history:\n${leadHistory}\n\nINSTRUCTION: Use this context naturally. Reference their previous interests/concerns if relevant to the campaign goal: "${reqGoal || ''}".`;
-                if (firstName) {
-                    initialMessage = `Hi ${firstName}, this is ${companyName} calling. I'm following up with you! How are you doing today?`;
-                } else {
-                    initialMessage = `Hi there, this is ${companyName} calling. I'm following up on our previous interaction. How are you doing today?`;
+            }
+            
+            if (agentData?.greeting_message) {
+                initialMessage = agentData.greeting_message.replace(/{name}/gi, firstName || '');
+            } else {
+                if (leadHistory) {
+                    if (firstName) {
+                        initialMessage = `Hi ${firstName}, this is ${companyName} calling. I'm following up with you! How are you doing today?`;
+                    } else {
+                        initialMessage = `Hi there, this is ${companyName} calling. I'm following up on our previous interaction. How are you doing today?`;
+                    }
+                } else if (firstName) {
+                    initialMessage = `Hi ${firstName}, this is ${companyName} calling. How are you doing today?`;
                 }
-            } else if (firstName) {
-                initialMessage = `Hi ${firstName}, this is ${companyName} calling. How are you doing today?`;
             }
             finalPrompt += `\n\nDATA COLLECTION: If you learn any NEW details about the lead (email, city, business type, company name), IMMEDIATELY call save_caller_info to store them. Do not wait.`;
+        } else {
+            if (agentData?.greeting_message) {
+                initialMessage = agentData.greeting_message.replace(/{name}/gi, '');
+            }
         }
 
         finalPrompt += "\n\nULTRA-IMPORTANT - CALL TERMINATION: As soon as you say a FINAL goodbye or the lead says goodbye, you MUST call 'hang_up' IMMEDIATELY. Never wait for them to hang up. This is critical to reduce telephony costs.";
@@ -3163,7 +3174,7 @@ app.post('/api/campaigns/gsheet-launch', async (req, res) => {
             return res.status(400).json({ error: "No valid phone numbers found in the Google Sheet." });
         }
 
-        const campaign = await launchCampaignWithContacts(contacts, campaignName, voice, goal, supabase);
+        const campaign = await launchCampaignWithContacts(contacts, campaignName, voice, goal, supabase, activeClientId);
 
         res.json({ 
             success: true, 
@@ -3390,15 +3401,20 @@ const FormData = require('form-data');
 // fetch is now defined at the top of the file
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
-async function getCorpusKey() {
-    const { data } = await supabase.from('integrations').select('api_key').eq('provider', 'ultravox_corpus').maybeSingle();
+async function getCorpusKey(client_id) {
+    let query = supabase.from('integrations').select('api_key').eq('provider', 'ultravox_corpus');
+    if (client_id) query = query.eq('client_id', client_id);
+    else query = query.is('client_id', null);
+    
+    const { data } = await query.maybeSingle();
     return data?.api_key || process.env.ULTRAVOX_API_KEY;
 }
 
 // Upload a PDF/Word file to Ultravox Corpora
 app.post('/api/corpora/upload', upload.single('file'), async (req, res) => {
     try {
-        const apiKey = await getCorpusKey();
+        const client_id = req.headers['x-client-id'] || null;
+        const apiKey = await getCorpusKey(client_id);
         if (!apiKey) return res.json({ success: false, error: 'No Corpus API key configured. Add it in API Credentials.' });
         if (!req.file) return res.json({ success: false, error: 'No file provided.' });
 
@@ -3426,8 +3442,9 @@ app.post('/api/corpora/upload', upload.single('file'), async (req, res) => {
         await supabase.from('integrations').upsert({
             provider: 'ultravox_corpus',
             api_key: apiKey,
+            client_id,
             meta_data: { corpusId: corpus.corpusId, last_updated: new Date().toISOString() }
-        }, { onConflict: 'provider' });
+        }, { onConflict: 'provider,client_id' }); // Note: you must ensure the integrations table has a unique constraint on (provider, client_id) if it doesn't already.
 
         res.json({ success: true, corpusId: corpus.corpusId, document: uploadData });
     } catch (err) {
@@ -3439,9 +3456,10 @@ app.post('/api/corpora/upload', upload.single('file'), async (req, res) => {
 // Add a URL as a source to Ultravox Corpora
 app.post('/api/corpora/add-url', async (req, res) => {
     try {
+        const client_id = req.headers['x-client-id'] || null;
         const { url } = req.body;
         if (!url) return res.json({ success: false, error: 'No URL provided.' });
-        const apiKey = await getCorpusKey();
+        const apiKey = await getCorpusKey(client_id);
         if (!apiKey) return res.json({ success: false, error: 'No Corpus API key configured.' });
 
         // Create a corpus for this URL
@@ -3466,8 +3484,9 @@ app.post('/api/corpora/add-url', async (req, res) => {
         await supabase.from('integrations').upsert({
             provider: 'ultravox_corpus',
             api_key: apiKey,
+            client_id,
             meta_data: { corpusId: corpus.corpusId, source_url: url, last_updated: new Date().toISOString() }
-        }, { onConflict: 'provider' });
+        }, { onConflict: 'provider,client_id' });
 
         res.json({ success: true, corpusId: corpus.corpusId, source: srcData });
     } catch (err) {
