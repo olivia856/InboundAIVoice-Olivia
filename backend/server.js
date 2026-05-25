@@ -2080,12 +2080,21 @@ app.get('/api/integrations', async (req, res) => {
 
 app.post('/api/integrations', async (req, res) => {
     try {
-        const { provider, api_key, meta_data, client_id } = req.body;
-        const { data: existing } = await supabase.from('integrations').select('id').eq('provider', provider).eq('client_id', client_id).maybeSingle();
+        let { provider, api_key, meta_data, client_id } = req.body;
+        if (client_id === 'undefined' || client_id === 'null' || !client_id) {
+            client_id = null;
+        }
+
+        const query = supabase.from('integrations').select('id').eq('provider', provider);
+        if (client_id) query.eq('client_id', client_id);
+        else query.is('client_id', null);
+        
+        const { data: existing } = await query.maybeSingle();
         
         if (existing && existing.id) {
             await supabase.from('integrations').update({ api_key, meta_data }).eq('id', existing.id);
         } else {
+            // Include client_id explicitly, if it's null it will be inserted as null
             await supabase.from('integrations').insert([{ provider, api_key, meta_data, client_id }]);
         }
         
