@@ -895,14 +895,12 @@ app.post('/api/twilio/inbound', async (req, res) => {
             selectedTools.push({ toolName: "playDtmfSounds" });
         }
 
-        let apiKeysObj = undefined;
         let finalUltravoxVoice = finalVoice;
         
         if (finalVoice === 'elevenlabs:custom') {
             const { data: elInt } = await supabase.from('integrations').select('*').eq('provider', 'elevenlabs').eq('client_id', clientId).maybeSingle();
             if (elInt && elInt.api_key && elInt.meta_data?.voice_id) {
                 finalUltravoxVoice = `elevenlabs:${elInt.meta_data.voice_id}`;
-                apiKeysObj = { elevenlabs: elInt.api_key };
             } else {
                 console.warn("[Ultravox] ElevenLabs selected but no valid integration found. Falling back to default.");
                 finalUltravoxVoice = "terrence";
@@ -912,7 +910,6 @@ app.post('/api/twilio/inbound', async (req, res) => {
         let ultravoxUrl = 'https://api.ultravox.ai/api/calls';
         let uvPayloadConfig = {
             systemPrompt: finalPrompt,
-            voice: finalUltravoxVoice,
             temperature: agentData?.temperature || 0.3,
             firstSpeaker: "FIRST_SPEAKER_AGENT",
             initialMessages: initialMessage ? [{ role: 'MESSAGE_ROLE_AGENT', text: initialMessage }] : undefined,
@@ -921,14 +918,22 @@ app.post('/api/twilio/inbound', async (req, res) => {
             inactivityMessages: [
                 { duration: '20s', message: "Are you still there? I haven't heard from you." }
             ],
-            maxDuration: '1800s',
-            apiKeys: apiKeysObj
+            maxDuration: '1800s'
         };
+
+        if (finalUltravoxVoice.startsWith('elevenlabs:')) {
+            uvPayloadConfig.externalVoice = {
+                elevenLabs: { voiceId: finalUltravoxVoice.split(':')[1] }
+            };
+        } else {
+            uvPayloadConfig.voice = finalUltravoxVoice;
+        }
 
         if (agentData?.outbound_agent_id && agentData.outbound_agent_id.trim() !== '') {
             ultravoxUrl = `https://api.ultravox.ai/api/agents/${agentData.outbound_agent_id.trim()}/calls`;
             delete uvPayloadConfig.systemPrompt;
             delete uvPayloadConfig.voice;
+            delete uvPayloadConfig.externalVoice;
             delete uvPayloadConfig.temperature;
             delete uvPayloadConfig.selectedTools;
             delete uvPayloadConfig.firstSpeaker;
@@ -1518,14 +1523,12 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
             selectedTools.push({ toolName: "playDtmfSounds" });
         }
 
-        let apiKeysObj = undefined;
         let finalUltravoxVoice = finalVoice;
         
         if (finalVoice === 'elevenlabs:custom') {
             const { data: elInt } = await supabase.from('integrations').select('*').eq('provider', 'elevenlabs').eq('client_id', client_id).maybeSingle();
             if (elInt && elInt.api_key && elInt.meta_data?.voice_id) {
                 finalUltravoxVoice = `elevenlabs:${elInt.meta_data.voice_id}`;
-                apiKeysObj = { elevenlabs: elInt.api_key };
             } else {
                 console.warn("[Ultravox] ElevenLabs selected but no valid integration found. Falling back to default.");
                 finalUltravoxVoice = "terrence";
@@ -1535,7 +1538,6 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
         let ultravoxUrl = 'https://api.ultravox.ai/api/calls';
         let uvPayloadConfig = {
             systemPrompt: finalPrompt,
-            voice: finalUltravoxVoice,
             temperature: agentData?.temperature || 0.3,
             firstSpeaker: "FIRST_SPEAKER_AGENT",
             initialMessages: initialMessage ? [{ role: 'MESSAGE_ROLE_AGENT', text: initialMessage }] : undefined,
@@ -1544,14 +1546,22 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
             inactivityMessages: [
                 { duration: '20s', message: "Are you still there?" }
             ],
-            maxDuration: '1800s',
-            apiKeys: apiKeysObj
+            maxDuration: '1800s'
         };
+
+        if (finalUltravoxVoice.startsWith('elevenlabs:')) {
+            uvPayloadConfig.externalVoice = {
+                elevenLabs: { voiceId: finalUltravoxVoice.split(':')[1] }
+            };
+        } else {
+            uvPayloadConfig.voice = finalUltravoxVoice;
+        }
 
         if (agentData?.outbound_agent_id && agentData.outbound_agent_id.trim() !== '') {
             ultravoxUrl = `https://api.ultravox.ai/api/agents/${agentData.outbound_agent_id.trim()}/calls`;
             delete uvPayloadConfig.systemPrompt;
             delete uvPayloadConfig.voice;
+            delete uvPayloadConfig.externalVoice;
             delete uvPayloadConfig.temperature;
             delete uvPayloadConfig.selectedTools;
             delete uvPayloadConfig.firstSpeaker;
