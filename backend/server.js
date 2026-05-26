@@ -1664,7 +1664,7 @@ app.get('/api/calls', async (req, res) => {
             .from('calls').select('*')
             .eq('client_id', client_id)
             .order('created_at', { ascending: false })
-            .limit(200);
+            .limit(1000);
         if (error) throw error;
         res.json({ success: true, calls: data });
     } catch (err) {
