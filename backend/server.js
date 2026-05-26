@@ -921,7 +921,8 @@ app.post('/api/twilio/inbound', async (req, res) => {
             inactivityMessages: [
                 { duration: '20s', message: "Are you still there? I haven't heard from you." }
             ],
-            maxDuration: '1800s'
+            maxDuration: '1800s',
+            apiKeys: apiKeysObj
         };
 
         if (agentData?.outbound_agent_id && agentData.outbound_agent_id.trim() !== '') {
@@ -1543,7 +1544,8 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
             inactivityMessages: [
                 { duration: '20s', message: "Are you still there?" }
             ],
-            maxDuration: '1800s'
+            maxDuration: '1800s',
+            apiKeys: apiKeysObj
         };
 
         if (agentData?.outbound_agent_id && agentData.outbound_agent_id.trim() !== '') {
