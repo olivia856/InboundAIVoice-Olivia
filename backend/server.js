@@ -2971,34 +2971,83 @@ app.post('/api/integrations/elevenlabs', async (req, res) => {
 
 // --- Shared CSV Parser (used by both CSV upload and Google Sheets) ---
 function parseCSVContacts(csvText) {
-    const lines = csvText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    // Normalize line endings and split into rows
+    const lines = csvText.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+        .split('\n').map(l => l.trim()).filter(l => l.length > 0);
     if (lines.length === 0) return [];
-    
+
+    // Helper: split a CSV line properly (handles quoted commas)
+    function splitCSVLine(line) {
+        const result = [];
+        let current = '';
+        let inQuotes = false;
+        for (let ch of line) {
+            if (ch === '"') { inQuotes = !inQuotes; continue; }
+            if (ch === ',' && !inQuotes) { result.push(current.trim()); current = ''; continue; }
+            current += ch;
+        }
+        result.push(current.trim());
+        return result;
+    }
+
+    // Helper: check if a value looks like a phone number
+    function isPhone(val) {
+        return /^\+?\d[\d\s\-().]{6,}$/.test(val);
+    }
+
+    // --- SMART HEADER DETECTION ---
+    // Check if the first row is a header row
+    const firstLineLower = lines[0].toLowerCase();
+    const hasHeader = firstLineLower.includes('phone') || firstLineLower.includes('name') ||
+                      firstLineLower.includes('number') || firstLineLower.includes('mobile') ||
+                      firstLineLower.includes('contact') || firstLineLower.includes('tel');
+
+    let nameColIdx = -1;
+    let phoneColIdx = -1;
     let startIdx = 0;
-    const firstLine = lines[0].toLowerCase();
-    if (firstLine.includes('phone') || firstLine.includes('name') || firstLine.includes('number')) {
+
+    if (hasHeader) {
         startIdx = 1;
+        const headerCols = splitCSVLine(lines[0]).map(h => h.toLowerCase().trim());
+        // Find name column
+        nameColIdx = headerCols.findIndex(h => h.includes('name') || h.includes('contact'));
+        // Find phone column (prefer 'phone' over 'number')
+        phoneColIdx = headerCols.findIndex(h => h.includes('phone') || h.includes('mobile') || h.includes('tel'));
+        if (phoneColIdx === -1) phoneColIdx = headerCols.findIndex(h => h.includes('number'));
+        console.log(`[CSV Parser] Headers detected. Name col: ${nameColIdx}, Phone col: ${phoneColIdx}`);
     }
 
     const contacts = [];
     for (let i = startIdx; i < lines.length; i++) {
-        const parts = lines[i].split(',').map(p => p.trim().replace(/"/g, ''));
+        const parts = splitCSVLine(lines[i]);
         let phone = null;
         let name = null;
-        for (const part of parts) {
-            if (part.match(/^\+?\d[\d\s\-()]{6,}$/)) {
-                phone = part.replace(/[\s\-()]/g, '');
-            } else if (part.length > 1 && !phone) {
-                name = part;
+
+        if (hasHeader && phoneColIdx !== -1) {
+            // Header-based: use exact column positions
+            const rawPhone = parts[phoneColIdx] || '';
+            const rawName = nameColIdx !== -1 ? (parts[nameColIdx] || '') : '';
+            if (rawPhone && isPhone(rawPhone)) {
+                phone = rawPhone.replace(/[\s\-()]/g, '');
+                name = rawName || null;
+            }
+        } else {
+            // Fallback: scan all columns — works regardless of column order
+            for (const part of parts) {
+                if (!phone && isPhone(part)) {
+                    phone = part.replace(/[\s\-()]/g, '');
+                } else if (!name && part.length > 1 && !isPhone(part)) {
+                    name = part;
+                }
             }
         }
+
         if (phone) {
-            if (!phone.startsWith('+')) {
-                phone = '+' + phone;
-            }
-            contacts.push({ phone, name: name || 'Unknown' });
+            if (!phone.startsWith('+')) phone = '+' + phone;
+            contacts.push({ phone, name: name && name.toLowerCase() !== 'unknown' ? name : 'Unknown' });
         }
     }
+    console.log(`[CSV Parser] Parsed ${contacts.length} contacts. Sample: ${JSON.stringify(contacts.slice(0, 3))}`);
     return contacts;
 }
 
