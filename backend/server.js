@@ -1573,10 +1573,19 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
                     const agentDetails = await agentRes.json();
                     const template = agentDetails.callTemplate || {};
                     
-                    // 1. Merge System Prompts (Dashboard Agent Prompt + Our Outbound Campaign Data)
-                    uvPayloadConfig.systemPrompt = `${template.systemPrompt || ''}\n\n=== OUTBOUND CAMPAIGN CONTEXT & RULES ===\n${uvPayloadConfig.systemPrompt}`;
+                    // 1. Create a clean data block with just the strict lead information
+                    let strictData = `=== OUTBOUND CAMPAIGN DATA ===\n`;
+                    strictData += `Lead Name: ${resolvedName || 'UNKNOWN'}\n`;
+                    strictData += `Lead Phone: ${toPhone || 'UNKNOWN'}\n`;
+                    if (typeof leadEmail !== 'undefined' && leadEmail) strictData += `Lead Email: ${leadEmail}\n`;
+                    strictData += `\nCRITICAL INSTRUCTION: You already know the Lead's Name from the data above. Do NOT ask them for their name. If they ask if you know their name, tell them yes and say their name.\n`;
+                    strictData += `==============================\n\n`;
+
+                    // 2. Overwrite the system prompt using ONLY the strict data + the Dashboard Agent Prompt
+                    // We completely discard the generic 'outbound sales AI' prompt from the backend to avoid persona conflicts
+                    uvPayloadConfig.systemPrompt = strictData + (template.systemPrompt || '');
                     
-                    // 2. Copy tools configured in the Dashboard Agent
+                    // 3. Copy tools configured in the Dashboard Agent
                     if (template.selectedTools) uvPayloadConfig.selectedTools = template.selectedTools;
                     
                     // 3. Copy Voice configured in the Dashboard Agent
@@ -1585,7 +1594,13 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
                     
                     // 4. Copy First Speaker Settings (e.g. Dashboard fallback messages)
                     if (template.firstSpeakerSettings) {
-                        uvPayloadConfig.firstSpeakerSettings = template.firstSpeakerSettings;
+                        // Dynamically inject the lead's name into the Agent's configured greetings
+                        let fssStr = JSON.stringify(template.firstSpeakerSettings);
+                        const fName = resolvedName ? resolvedName.split(' ')[0] : 'there';
+                        fssStr = fssStr.replace(/\{name\}/gi, fName);
+                        
+                        uvPayloadConfig.firstSpeakerSettings = JSON.parse(fssStr);
+                        
                         // If the UI defines a First Speaker rule, it conflicts with hardcoded 'initialMessages' or 'firstSpeaker' flags
                         delete uvPayloadConfig.firstSpeaker;
                         delete uvPayloadConfig.initialMessages;
