@@ -1562,31 +1562,45 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
         }
 
         if (agentData?.outbound_agent_id && agentData.outbound_agent_id.trim() !== '') {
-            ultravoxUrl = `https://api.ultravox.ai/api/agents/${agentData.outbound_agent_id.trim()}/calls`;
-            
-            // For Agent endpoints, we cannot override the systemPrompt directly.
-            // Instead, we inject the dynamic context (lead name, etc.) as the very first USER message in the history.
-            // Since we follow it immediately with the AGENT's initial greeting, the agent won't "reply" to this context,
-            // but will remember it for the rest of the conversation.
-            const contextMsg = { 
-                role: 'MESSAGE_ROLE_USER', 
-                text: `[SYSTEM OVERRIDE CONTEXT]: We are initiating an outbound call. Here is the strict context and rules for this specific lead:\n\n${uvPayloadConfig.systemPrompt}` 
-            };
-            
-            if (uvPayloadConfig.initialMessages && uvPayloadConfig.initialMessages.length > 0) {
-                uvPayloadConfig.initialMessages.unshift(contextMsg);
-            } else {
-                uvPayloadConfig.initialMessages = [contextMsg];
-            }
+            try {
+                // Fetch the user's Agent configuration from Ultravox
+                const agentRes = await fetch(`https://api.ultravox.ai/api/agents/${agentData.outbound_agent_id.trim()}`, {
+                    method: 'GET',
+                    headers: { 'X-API-Key': ACTIVE_ULTRAVOX_KEY }
+                });
+                
+                if (agentRes.ok) {
+                    const agentDetails = await agentRes.json();
+                    const template = agentDetails.callTemplate || {};
+                    
+                    // 1. Merge System Prompts (Dashboard Agent Prompt + Our Outbound Campaign Data)
+                    uvPayloadConfig.systemPrompt = `${template.systemPrompt || ''}\n\n=== OUTBOUND CAMPAIGN CONTEXT & RULES ===\n${uvPayloadConfig.systemPrompt}`;
+                    
+                    // 2. Copy tools configured in the Dashboard Agent
+                    if (template.selectedTools) uvPayloadConfig.selectedTools = template.selectedTools;
+                    
+                    // 3. Copy Voice configured in the Dashboard Agent
+                    if (template.voice) uvPayloadConfig.voice = template.voice;
+                    if (template.externalVoice) uvPayloadConfig.externalVoice = template.externalVoice;
+                    
+                    // 4. Copy First Speaker Settings (e.g. Dashboard fallback messages)
+                    if (template.firstSpeakerSettings) {
+                        uvPayloadConfig.firstSpeakerSettings = template.firstSpeakerSettings;
+                        // If the UI defines a First Speaker rule, it conflicts with hardcoded 'initialMessages' or 'firstSpeaker' flags
+                        delete uvPayloadConfig.firstSpeaker;
+                        delete uvPayloadConfig.initialMessages;
+                    }
 
-            delete uvPayloadConfig.systemPrompt;
-            delete uvPayloadConfig.systemPromptOverride;
-            delete uvPayloadConfig.voice;
-            delete uvPayloadConfig.externalVoice;
-            delete uvPayloadConfig.temperature;
-            delete uvPayloadConfig.selectedTools;
-            delete uvPayloadConfig.firstSpeaker;
-            delete uvPayloadConfig.inactivityMessages;
+                    // We intentionally keep ultravoxUrl as 'https://api.ultravox.ai/api/calls'.
+                    // By passing the perfectly merged configuration to the raw calls endpoint, 
+                    // we avoid all strict Agent API restrictions regarding prompt overrides.
+                    console.log(`[Ultravox] Successfully merged Agent ${agentData.outbound_agent_id.trim()} with outbound campaign context.`);
+                } else {
+                    console.error("[Ultravox] Failed to fetch Agent details. Proceeding with default generic prompt.", await agentRes.text());
+                }
+            } catch (agentErr) {
+                console.error("[Ultravox] Error fetching Agent config:", agentErr);
+            }
         }
 
         const uvResponse = await fetch(ultravoxUrl, {
