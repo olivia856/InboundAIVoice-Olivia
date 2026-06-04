@@ -1578,7 +1578,7 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
                     strictData += `Lead Name: ${resolvedName || 'UNKNOWN'}\n`;
                     strictData += `Lead Phone: ${toPhone || 'UNKNOWN'}\n`;
                     if (typeof leadEmail !== 'undefined' && leadEmail) strictData += `Lead Email: ${leadEmail}\n`;
-                    strictData += `\nCRITICAL INSTRUCTION: You already know the Lead's Name from the data above. Do NOT ask them for their name. If they ask if you know their name, tell them yes and say their name.\n`;
+                    strictData += `\nCRITICAL INSTRUCTION: You already know the Lead's Name and Phone from the data above. Do NOT ask them for their name or phone number. If you need to book a meeting or appointment, use this data directly instead of asking the user for it.\n`;
                     strictData += `==============================\n\n`;
 
                     // 2. Overwrite the system prompt using ONLY the strict data + the Dashboard Agent Prompt
