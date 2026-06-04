@@ -1563,6 +1563,8 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
 
         if (agentData?.outbound_agent_id && agentData.outbound_agent_id.trim() !== '') {
             ultravoxUrl = `https://api.ultravox.ai/api/agents/${agentData.outbound_agent_id.trim()}/calls`;
+            // When using an Agent ID, we must use systemPromptOverride instead of systemPrompt
+            uvPayloadConfig.systemPromptOverride = uvPayloadConfig.systemPrompt;
             delete uvPayloadConfig.systemPrompt;
             delete uvPayloadConfig.voice;
             delete uvPayloadConfig.externalVoice;
