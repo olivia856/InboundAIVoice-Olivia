@@ -1563,9 +1563,24 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
 
         if (agentData?.outbound_agent_id && agentData.outbound_agent_id.trim() !== '') {
             ultravoxUrl = `https://api.ultravox.ai/api/agents/${agentData.outbound_agent_id.trim()}/calls`;
-            // When using an Agent ID, we must use systemPromptOverride instead of systemPrompt
-            uvPayloadConfig.systemPromptOverride = uvPayloadConfig.systemPrompt;
+            
+            // For Agent endpoints, we cannot override the systemPrompt directly.
+            // Instead, we inject the dynamic context (lead name, etc.) as the very first USER message in the history.
+            // Since we follow it immediately with the AGENT's initial greeting, the agent won't "reply" to this context,
+            // but will remember it for the rest of the conversation.
+            const contextMsg = { 
+                role: 'MESSAGE_ROLE_USER', 
+                text: `[SYSTEM OVERRIDE CONTEXT]: We are initiating an outbound call. Here is the strict context and rules for this specific lead:\n\n${uvPayloadConfig.systemPrompt}` 
+            };
+            
+            if (uvPayloadConfig.initialMessages && uvPayloadConfig.initialMessages.length > 0) {
+                uvPayloadConfig.initialMessages.unshift(contextMsg);
+            } else {
+                uvPayloadConfig.initialMessages = [contextMsg];
+            }
+
             delete uvPayloadConfig.systemPrompt;
+            delete uvPayloadConfig.systemPromptOverride;
             delete uvPayloadConfig.voice;
             delete uvPayloadConfig.externalVoice;
             delete uvPayloadConfig.temperature;
