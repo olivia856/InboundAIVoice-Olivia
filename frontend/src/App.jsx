@@ -761,9 +761,9 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
             <div className="grid grid-cols-4 gap-5">
               {[
                 { label: 'Total Calls', value: callLogs.filter(c => { const d = new Date(c.created_at); const n = new Date(); return d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear(); }).length, sub: 'This month', color: 'from-violet-500/10 to-indigo-500/10', accent: 'text-violet-400' },
-                { label: 'Appointments', value: reports?.bookedAppointments || appointments.length, sub: 'Booked by AI', color: 'from-emerald-500/10 to-teal-500/10', accent: 'text-emerald-400' },
-                { label: 'Active Contacts', value: new Set([...callLogs.filter(c => c.from_phone || c.to_phone).map(c => c.direction === 'inbound' ? c.from_phone : c.to_phone), ...leads.map(l => l.phone).filter(Boolean)]).size, sub: 'Unique Callers', color: 'from-blue-500/10 to-cyan-500/10', accent: 'text-blue-400' },
-                { label: 'Completed', value: reports?.hourlyVolume ? reports.hourlyVolume.reduce((acc, h) => acc + h.count, 0) : callLogs.filter(c => c.status === 'completed').length, sub: 'Finished calls', color: 'from-amber-500/10 to-orange-500/10', accent: 'text-amber-400' }
+                { label: 'Appointments', value: appointments.filter(a => { const d = new Date(a.created_at || a.start_time); const n = new Date(); return d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear(); }).length, sub: 'Booked by AI', color: 'from-emerald-500/10 to-teal-500/10', accent: 'text-emerald-400' },
+                { label: 'Active Contacts', value: new Set([...callLogs.filter(c => { const d = new Date(c.created_at); const n = new Date(); return d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear(); }).filter(c => c.from_phone || c.to_phone).map(c => c.direction === 'inbound' ? c.from_phone : c.to_phone), ...leads.filter(l => { const d = new Date(l.created_at); const n = new Date(); return d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear(); }).map(l => l.phone).filter(Boolean)]).size, sub: 'Unique Callers', color: 'from-blue-500/10 to-cyan-500/10', accent: 'text-blue-400' },
+                { label: 'Completed', value: callLogs.filter(c => { const d = new Date(c.created_at); const n = new Date(); return d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear() && c.status === 'completed'; }).length, sub: 'Finished calls', color: 'from-amber-500/10 to-orange-500/10', accent: 'text-amber-400' }
               ].map((stat, i) => (
                 <div key={i} className={`stat-card bg-gradient-to-br ${stat.color} border border-border rounded-2xl p-6`}>
                   <div className="text-2xs font-bold text-muted-foreground uppercase tracking-ultra">{stat.label}</div>
@@ -826,11 +826,9 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                       >
                         {(reports?.outcomes || []).map((entry, index) => {
                           const COLORS = {
-                            'Booked': '#10b981', // Emerald
-                            'Resolved': '#6366f1', // Indigo
-                            'Follow Up': '#f59e0b', // Amber
-                            'Missed': '#f43f5e', // Rose
-                            'Standard Inquiry': '#3b82f6', // Blue
+                            'Positive': '#10b981', // Emerald
+                            'Neutral': '#3b82f6', // Blue
+                            'Negative': '#f43f5e', // Rose
                             'No Connection': '#64748b' // Slate
                           };
                           return <Cell key={`cell-${index}`} fill={COLORS[entry.name] || '#8b5cf6'} stroke="none" />;
@@ -2293,13 +2291,35 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                             <h4 className="font-semibold text-sm">{c.name}</h4>
                             <p className="text-[10px] text-muted-foreground mt-0.5 font-mono">{c.goal ? `Goal: ${c.goal.substring(0,60)}...` : 'No goal set'}</p>
                           </div>
-                          <span className={cn(
-                            "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider",
-                            c.status === 'running' ? 'bg-blue-500/10 text-blue-400' :
-                            c.status === 'completed' ? 'bg-green-500/10 text-green-400' :
-                            c.status === 'failed' ? 'bg-red-500/10 text-red-400' :
-                            'bg-yellow-500/10 text-yellow-400'
-                          )}>{c.status === 'running' ? '● Live' : c.status}</span>
+                          <div className="flex items-center gap-3">
+                            <span className={cn(
+                              "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider",
+                              c.status === 'running' ? 'bg-blue-500/10 text-blue-400' :
+                              c.status === 'completed' ? 'bg-green-500/10 text-green-400' :
+                              c.status === 'failed' ? 'bg-red-500/10 text-red-400' :
+                              'bg-yellow-500/10 text-yellow-400'
+                            )}>{c.status === 'running' ? '● Live' : c.status}</span>
+                            <button 
+                               onClick={() => {
+                                 if (window.confirm(`Are you sure you want to delete the campaign "${c.name}"? This cannot be undone.`)) {
+                                   fetch(`${API_BASE}/api/campaigns/${c.id}`, { 
+                                     method: 'DELETE', 
+                                     headers: { 'x-client-id': user?.client_code || user?.clientCode } 
+                                   })
+                                     .then(r => r.json())
+                                     .then(d => {
+                                       if (d.success) { showToast('Campaign deleted successfully', 'success'); fetchAll(); }
+                                       else showToast(d.error || 'Failed to delete campaign', 'error');
+                                     })
+                                     .catch(() => showToast('Failed to delete campaign', 'error'));
+                                 }
+                               }}
+                               className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded-md transition"
+                               title="Delete Campaign"
+                            >
+                              <Trash2 size={15} strokeWidth={2.5} />
+                            </button>
+                          </div>
                        </div>
                        <div className="grid grid-cols-3 sm:grid-cols-6 gap-0 text-center">
                           <div className="p-3 border-r border-border">

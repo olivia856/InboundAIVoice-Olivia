@@ -2850,6 +2850,30 @@ app.patch('/api/campaigns/:id', async (req, res) => {
     }
 });
 
+// DELETE a campaign
+app.delete('/api/campaigns/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const clientId = req.headers['x-client-id'] || req.query.client_id;
+        
+        if (!clientId) return res.status(403).json({ error: "Unauthorized" });
+
+        // Ensure the campaign belongs to this client before deleting
+        const { data: check, error: checkError } = await supabase.from('campaigns').select('id').eq('id', id).eq('client_id', clientId).single();
+        if (checkError || !check) {
+            return res.status(404).json({ error: "Campaign not found or unauthorized" });
+        }
+
+        const { error } = await supabase.from('campaigns').delete().eq('id', id);
+        if (error) throw error;
+        
+        res.json({ success: true, message: "Campaign deleted successfully" });
+    } catch(err) {
+        console.error("Delete campaign error:", err);
+        res.status(500).json({ error: "API Failure" });
+    }
+});
+
 // --- INTEGRATIONS (TWILIO / API KEYS) ---
 app.get('/api/integrations/twilio', async (req, res) => {
     try {
@@ -3355,7 +3379,7 @@ app.get('/api/reports', async (req, res) => {
         let positive = 0; let negative = 0; let neutral = 0;
         
         // Advanced aggregations for charting
-        const statusCounts = { "Booked": 0, "Resolved": 0, "Follow Up": 0, "Missed": 0, "Standard Inquiry": 0 };
+        const statusCounts = { "Positive": 0, "Neutral": 0, "Negative": 0, "No Connection": 0 };
         const hourlyVolume = new Array(24).fill(0).map((_, i) => {
             const h = i === 0 ? 12 : (i > 12 ? i - 12 : i);
             const ampm = i < 12 ? 'AM' : 'PM';
@@ -3370,30 +3394,21 @@ app.get('/api/reports', async (req, res) => {
 
             calls.forEach(c => {
                 // 1. Sentiment stats
-                const cat = (c.sentiment_category || '').toLowerCase();
-                if (cat === 'positive') positive++;
-                else if (cat === 'negative') negative++;
+                const cat = (c.sentiment_category || 'Neutral');
+                const catLower = cat.toLowerCase();
+                if (catLower === 'positive') positive++;
+                else if (catLower === 'negative') negative++;
                 else neutral++;
 
-                // 2. Status/Outcome Stats
-                const rawStatus = c.status || '';
-                let s = rawStatus;
+                // 2. Status/Outcome Stats (Chart Data)
                 if (!c.duration_seconds || Number(c.duration_seconds) === 0) {
-                    s = "No Connection";
-                } else {
-                    // Use the specific call_status column if the AI set it (Booked, Follow Up, Resolved)
-                    s = c.call_status || "Standard Inquiry";
-                }
-                
-                if (Object.prototype.hasOwnProperty.call(statusCounts, s)) {
-                    statusCounts[s]++;
-                } else if (s.toLowerCase().includes('book')) {
-                    statusCounts["Booked"]++;
-                } else if (s.toLowerCase().includes('standard')) {
-                    statusCounts["Standard Inquiry"]++;
-                } else if (s === "No Connection") {
-                    if (!statusCounts["No Connection"]) statusCounts["No Connection"] = 0;
                     statusCounts["No Connection"]++;
+                } else if (catLower === 'positive') {
+                    statusCounts["Positive"]++;
+                } else if (catLower === 'negative') {
+                    statusCounts["Negative"]++;
+                } else {
+                    statusCounts["Neutral"]++;
                 }
 
                 // 3. Hourly Trend (TIMEZONE FIX: Shift UTC to IST for charts)
