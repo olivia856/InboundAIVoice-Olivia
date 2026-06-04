@@ -1209,7 +1209,11 @@ app.post('/api/twilio/outbound-twiml', async (req, res) => {
                     
                     if (callerProfile && (callerProfile.full_name || profileHasHistory)) {
                         console.log(`[Outbound CallerMemory] Profile Match: name: ${callerProfile.full_name || 'UNKNOWN'} (${toPhone}), calls: ${callerProfile.total_calls}`);
-                        leadName = callerProfile.full_name || leadName || reqName || "";
+                        // ✅ FIX: reqName from sheet/CSV ALWAYS takes priority.
+                        // Only use profile name if no name was provided from the campaign,
+                        // and profile name is a real name (not blank or 'Unknown').
+                        const profileName = (callerProfile.full_name && callerProfile.full_name.toLowerCase() !== 'unknown') ? callerProfile.full_name : null;
+                        leadName = reqName || profileName || leadName || "";
                         leadEmail = callerProfile.email || "";
                         // Build history from profile
                         if (callerProfile.conversation_history && Array.isArray(callerProfile.conversation_history) && callerProfile.conversation_history.length > 0) {
@@ -3038,11 +3042,18 @@ async function launchCampaignWithContacts(contacts, campaignName, voice, goal, s
             await supabase.from('campaigns').update({ status: 'failed' }).eq('id', campaign.id);
             return;
         }
-        let serverBaseUrl = process.env.BACKEND_URL;
-        if (!serverBaseUrl || serverBaseUrl.includes('your-server.com')) {
-            console.error("⚠️ [Campaign] BACKEND_URL is missing or uses dummy template. Campaign callbacks will fail. Set it in your environment variables.");
-            serverBaseUrl = `https://${process.env.RAILWAY_PUBLIC_DOMAIN || 'localhost'}`;
+        let serverBaseUrl = process.env.BACKEND_URL || process.env.SERVER_BASE_URL || '';
+        if (!serverBaseUrl || serverBaseUrl.includes('your-server.com') || serverBaseUrl.includes('localhost')) {
+            if (process.env.RAILWAY_PUBLIC_DOMAIN) {
+                serverBaseUrl = `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`;
+            } else {
+                console.error("⚠️ [Campaign] BACKEND_URL is not configured. Outbound calls will fail because Twilio cannot reach a localhost webhook. Please set BACKEND_URL in your environment variables to your public server URL (e.g. https://your-app.easypanel.host).");
+                // Mark campaign as failed immediately rather than silently failing
+                await supabase.from('campaigns').update({ status: 'failed' }).eq('id', campaign.id);
+                return;
+            }
         }
+        serverBaseUrl = serverBaseUrl.replace(/\/$/, '');
 
         let agentData = null;
         try {

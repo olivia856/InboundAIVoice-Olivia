@@ -1631,15 +1631,10 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                               )}>
                                 {(() => {
                                   if (!c.duration_seconds || c.duration_seconds === 0) return 'No Connection';
-                                  const raw = (c.sentiment || '').trim();
                                   const cat = (c.sentiment_category || 'Neutral');
-                                  if (raw && raw.toLowerCase() !== 'neutral' && raw.toLowerCase() !== cat.toLowerCase()) {
-                                    const words = raw.split(/\s+/).filter(Boolean);
-                                    return words.length >= 2 ? words.slice(0, 4).join(' ') : raw;
-                                  }
-                                  if (cat === 'Positive' && !raw) return 'Interested';
-                                  if (cat === 'Negative' && !raw) return 'Customer Concern';
-                                  return 'Standard Inquiry';
+                                  if (cat === 'Positive') return 'Positive';
+                                  if (cat === 'Negative') return 'Negative';
+                                  return 'Neutral';
                                 })()}
                               </div>
                            </td>
