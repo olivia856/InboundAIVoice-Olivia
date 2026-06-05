@@ -1744,30 +1744,37 @@ app.get('/api/recordings/:callSid', async (req, res) => {
             return res.status(404).send('Recording not found');
         }
 
-        if (!call.recording_url.includes('api.twilio.com')) {
-            return res.redirect(call.recording_url); // Redirect to S3 if upgraded
-        }
+        const isDownload = req.query.download === 'true';
 
-        // Fetch credentials
-        const { data: twInt } = await supabase.from('integrations').select('*').eq('provider', 'twilio').eq('client_id', call.client_id).maybeSingle();
-        const platformTw = await getPlatformKey('twilio');
-        const TW_SID = twInt?.meta_data?.sid || platformTw?.meta_data?.sid || process.env.TWILIO_ACCOUNT_SID;
-        const TW_AUTH = twInt?.api_key || platformTw?.api_key || process.env.TWILIO_AUTH_TOKEN;
-
-        if (!TW_SID || !TW_AUTH) {
-            return res.status(401).send('Telephony credentials missing');
+        if (!call.recording_url.includes('api.twilio.com') && !isDownload) {
+            return res.redirect(call.recording_url); // Redirect to S3 if upgraded and not explicitly downloading
         }
 
         const axios = require('axios');
-        const response = await axios({
+        let requestConfig = {
             method: 'get',
             url: call.recording_url,
-            responseType: 'stream',
-            auth: { username: TW_SID, password: TW_AUTH }
-        });
+            responseType: 'stream'
+        };
+
+        // If it's a Twilio URL, inject authentication
+        if (call.recording_url.includes('api.twilio.com')) {
+            const { data: twInt } = await supabase.from('integrations').select('*').eq('provider', 'twilio').eq('client_id', call.client_id).maybeSingle();
+            const platformTw = await getPlatformKey('twilio');
+            const TW_SID = twInt?.meta_data?.sid || platformTw?.meta_data?.sid || process.env.TWILIO_ACCOUNT_SID;
+            const TW_AUTH = twInt?.api_key || platformTw?.api_key || process.env.TWILIO_AUTH_TOKEN;
+
+            if (!TW_SID || !TW_AUTH) {
+                return res.status(401).send('Telephony credentials missing');
+            }
+            requestConfig.auth = { username: TW_SID, password: TW_AUTH };
+        }
+
+        const response = await axios(requestConfig);
 
         res.setHeader('Content-Type', 'audio/mpeg');
-        res.setHeader('Content-Disposition', `inline; filename="recording_${callSid}.mp3"`);
+        const disposition = isDownload ? 'attachment' : 'inline';
+        res.setHeader('Content-Disposition', `${disposition}; filename="recording_${callSid || Date.now()}.mp3"`);
         response.data.pipe(res);
 
     } catch (err) {

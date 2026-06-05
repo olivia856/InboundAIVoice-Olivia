@@ -2413,7 +2413,7 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                         <td className="py-4 px-5 text-right">
                           <div className="flex justify-end gap-2">
                              <button onClick={() => setViewSummaryModal(c)} className="bg-white/5 hover:bg-white/10 text-[10px] font-bold px-3 py-1.5 rounded-lg border border-border transition-colors uppercase tracking-wider">Summary</button>
-                             <a href={c.recording_url.includes('api.twilio.com') ? `${API_BASE}/api/recordings/${c.twilio_sid}` : c.recording_url} target="_blank" rel="noreferrer" className="p-2 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-lg transition-all">
+                             <a href={`${API_BASE}/api/recordings/${c.twilio_sid}?download=true`} download className="p-2 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-lg transition-all" title="Download Audio">
                                <Download size={14} />
                              </a>
                           </div>
