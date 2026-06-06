@@ -1714,6 +1714,63 @@ app.post('/api/twilio/recording-callback', async (req, res) => {
 });
 
 // Fetch Call Logs - STRICTLY filtered by client_id for data isolation
+// === AUTOMATION LOGS (n8n Webhooks) ===
+
+// 1. Endpoint for n8n to push automation events (emails sent, etc.)
+app.post('/api/automations/log', async (req, res) => {
+    try {
+        const { client_id, automation_type, lead_name, lead_phone, lead_email, status } = req.body;
+
+        if (!client_id || (!lead_phone && !lead_email)) {
+            return res.status(400).json({ error: "client_id and either lead_phone or lead_email are required." });
+        }
+
+        // Determine which status to update based on automation_type
+        let updateData = {};
+        if (automation_type === 'email' || automation_type === 'follow_up_email') {
+            updateData.email_status = status || 'Sent';
+        } else if (automation_type === 'sms' || automation_type === 'text') {
+            updateData.sms_status = status || 'Sent';
+        } else if (automation_type === 'whatsapp') {
+            updateData.whatsapp_status = status || 'Sent';
+        } else {
+            // Fallback if not specified
+            updateData.email_status = status || 'Sent';
+        }
+
+        // Try to find an existing appointment/notification log
+        let query = supabase.from('appointments').select('*').eq('client_id', client_id);
+        if (lead_phone) query = query.eq('phone', lead_phone);
+        else if (lead_email) query = query.eq('email', lead_email);
+
+        const { data: existingAppts } = await query.order('created_at', { ascending: false }).limit(1);
+
+        if (existingAppts && existingAppts.length > 0) {
+            // Update existing
+            const { error } = await supabase.from('appointments').update(updateData).eq('id', existingAppts[0].id);
+            if (error) throw error;
+        } else {
+            // Create new record just for logging this integration event
+            const { error } = await supabase.from('appointments').insert([{
+                client_id,
+                name: lead_name || '',
+                phone: lead_phone || '',
+                email: lead_email || '',
+                start_time: new Date().toISOString(),
+                end_time: new Date().toISOString(),
+                status: 'completed',
+                ...updateData
+            }]);
+            if (error) throw error;
+        }
+
+        res.json({ success: true, message: "Integration logged successfully" });
+    } catch (err) {
+        console.error("Integration Log Error:", err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 app.get('/api/calls', async (req, res) => {
     try {
         const { client_id } = req.query;
