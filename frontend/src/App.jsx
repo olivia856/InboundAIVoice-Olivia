@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { BarChart3, Calendar, Bot, Mic, Key, Phone, Users, PhoneOutgoing, Globe, Sparkles, Trash2, RefreshCw, CheckCircle, XCircle, Target, BookOpen, Megaphone, Bell, Sun, Moon, Wrench, TrendingUp, Clock, Activity, Edit2, Send, Filter, Download, ToggleLeft, ToggleRight, Link, FileText, Database } from 'lucide-react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { BarChart3, Calendar, Bot, Mic, Key, Phone, Users, PhoneOutgoing, Globe, Sparkles, Trash2, RefreshCw, CheckCircle, XCircle, Target, BookOpen, Megaphone, Bell, Sun, Moon, Wrench, TrendingUp, Clock, Activity, Edit2, Send, Filter, Download, ToggleLeft, ToggleRight, Link, FileText, Database, Workflow } from 'lucide-react';
 import { cn } from './lib/utils';
 import * as XLSX from 'xlsx';
 import { 
@@ -68,11 +68,13 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
   const [elevenLabsConfig, setElevenLabsConfig] = useState({ api_key: '', voice_id: '' });
   const [corpusConfig, setCorpusConfig] = useState({ api_key: '' });
   const [resendConfig, setResendConfig] = useState({ api_key: '' });
+  const [n8nConfig, setN8nConfig] = useState({ api_key: '' });
   const [isSavingCreds, setIsSavingCreds] = useState(false);
   const [isSavingUV, setIsSavingUV] = useState(false);
   const [isSavingElevenLabs, setIsSavingElevenLabs] = useState(false);
   const [isSavingCorpus, setIsSavingCorpus] = useState(false);
   const [isSavingResend, setIsSavingResend] = useState(false);
+  const [isSavingN8n, setIsSavingN8n] = useState(false);
 
   const fetchTwilioConfig = async () => {
     try {
@@ -106,6 +108,10 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
         const elevenlabs = data.integrations.find(i => i.provider === 'elevenlabs');
         if (elevenlabs) {
           setElevenLabsConfig({ api_key: elevenlabs.api_key, voice_id: elevenlabs.meta_data?.voice_id || '' });
+        }
+        const n8n = data.integrations.find(i => i.provider === 'n8n');
+        if (n8n) {
+          setN8nConfig({ api_key: n8n.api_key });
         }
       }
     } catch (e) { console.error(e); }
@@ -210,6 +216,32 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
       } else { showToast(data.error || 'Failed.', 'error'); }
     } catch (e) { showToast('Update failed.', 'error'); }
     setIsSavingResend(false);
+  };
+
+  const saveN8nConfig = async (e) => {
+    e.preventDefault();
+    setIsSavingN8n(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/integrations`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          client_id: (user?.client_code || user?.clientCode),
+          provider: 'n8n',
+          api_key: n8nConfig.api_key
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast('n8n Webhook URL saved.', 'success');
+        fetchElevenLabsConfig();
+      } else {
+        showToast('Failed to save n8n Webhook.', 'error');
+      }
+    } catch (err) {
+      showToast('Error saving n8n Webhook.', 'error');
+    }
+    setIsSavingN8n(false);
   };
 
   const saveElevenLabsConfig = async (e) => {
@@ -2446,6 +2478,27 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
             <div>
               <h2 className="text-3xl font-extrabold tracking-tight">Integration Settings</h2>
               <p className="text-sm text-muted-foreground mt-1.5 font-medium">Configure your telephony and AI provider credentials</p>
+            </div>
+
+            {/* --- N8N WEBHOOK CONFIG --- */}
+            <div className="bg-card border border-border rounded-2xl p-8 shadow-premium-lg mb-8">
+              <h3 className="text-sm font-bold uppercase tracking-widest mb-6 flex items-center gap-2">
+                <Workflow size={16} className="text-primary" /> n8n Automations (Webhooks)
+              </h3>
+              <p className="text-sm text-muted-foreground mb-6">
+                Paste your n8n Webhook URL here. The system will POST JSON payloads to this URL 30 minutes before a meeting starts, allowing you to trigger custom workflows (like reminder emails via Gmail or Resend).
+              </p>
+              <form onSubmit={saveN8nConfig} className="space-y-5">
+                <div>
+                  <label className="block text-[10px] font-bold text-muted-foreground uppercase tracking-ultra mb-2">n8n Webhook URL</label>
+                  <input type="url" value={n8nConfig.api_key} onChange={(e) => setN8nConfig({...n8nConfig, api_key: e.target.value})} placeholder="https://n8n.yourdomain.com/webhook/..." className="w-full bg-background border border-border p-3 rounded-xl text-sm outline-none focus:border-primary transition-all font-mono" />
+                </div>
+                <div className="pt-4">
+                  <button type="submit" disabled={isSavingN8n} className="w-full bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 font-bold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2">
+                    {isSavingN8n ? 'Saving...' : 'Update n8n Webhook'}
+                  </button>
+                </div>
+              </form>
             </div>
 
             {/* --- TWILIO CONFIG --- */}

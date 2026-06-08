@@ -158,10 +158,41 @@ async function dispatchOmnichannel(appointmentId, name, phone, email, templateTy
     const { data: reInt } = clientId
         ? await supabase.from('integrations').select('*').eq('provider', 'resend').eq('client_id', clientId).maybeSingle()
         : { data: null };
+    const { data: n8nInt } = clientId
+        ? await supabase.from('integrations').select('*').eq('provider', 'n8n').eq('client_id', clientId).maybeSingle()
+        : { data: null };
 
     // Platform fallbacks
     const platformTw = await getPlatformKey('twilio');
     const platformRe = await getPlatformKey('resend');
+
+    // --- N8N WEBHOOK DELEGATION ---
+    if (n8nInt?.api_key) {
+        console.log(`[Omnichannel] n8n Webhook found for ${clientId}, firing webhook for ${templateType}.`);
+        try {
+            await fetch(n8nInt.api_key, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    appointment_id: appointmentId,
+                    client_name: companyName,
+                    client_id: clientId,
+                    lead_name: name,
+                    lead_email: email,
+                    lead_phone: phone,
+                    start_time: dynamicData?.start_time,
+                    event_type: templateType
+                })
+            });
+        } catch (err) {
+            console.error('[Omnichannel] n8n Webhook failed:', err);
+        }
+        
+        // If it's a reminder or missed meeting, WE STOP HERE because the user explicitly wants to disable inbuilt Twilio/Resend for these in favor of n8n.
+        if (templateType === 'meeting_reminder' || templateType === 'meeting_missed') {
+            return;
+        }
+    }
 
     const TWILIO_SID = twInt?.meta_data?.sid || platformTw?.meta_data?.sid || process.env.TWILIO_ACCOUNT_SID;
     const TWILIO_AUTH = twInt?.api_key || platformTw?.api_key || process.env.TWILIO_AUTH_TOKEN;
@@ -3539,19 +3570,19 @@ cron.schedule('*/5 * * * *', async () => {
     console.log('[Cron] Checking for upcoming & missed appointments...');
     try {
         const now = new Date();
-        const fifteenMinsFromNow = new Date(now.getTime() + 20 * 60 * 1000); // +20min window (catches 15min mark)
-        const fiveMinsFromNow = new Date(now.getTime() + 5 * 60 * 1000);   // lower bound
+        const upperBounds = new Date(now.getTime() + 35 * 60 * 1000); // +35min window (catches 30min mark)
+        const lowerBounds = new Date(now.getTime() + 25 * 60 * 1000); // +25min lower bound
         const nowIso = now.toISOString();
-        const fifteenMinsIso = fifteenMinsFromNow.toISOString();
-        const fiveMinsIso = fiveMinsFromNow.toISOString();
+        const upperIso = upperBounds.toISOString();
+        const lowerIso = lowerBounds.toISOString();
 
-        // 1. Upcoming Reminders (Starting between now+5min and now+20min = ~15min window)
+        // 1. Upcoming Reminders (Starting between now+25min and now+35min = ~30min mark)
         const { data: upcoming } = await supabase.from('appointments')
             .select('*')
             .eq('status', 'confirmed')
             .eq('reminder_sent', false)
-            .gte('start_time', fiveMinsIso)
-            .lte('start_time', fifteenMinsIso);
+            .gte('start_time', lowerIso)
+            .lte('start_time', upperIso);
 
         if (upcoming && upcoming.length > 0) {
             for (const appt of upcoming) {
