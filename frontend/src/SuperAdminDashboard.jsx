@@ -158,8 +158,12 @@ export default function SuperAdminDashboard({ user, onLogout, onViewClient }) {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('azlon_clients', JSON.stringify(clients));
-    localStorage.setItem('azlon_clients_version', 'v3');
+    try {
+      localStorage.setItem('azlon_clients', JSON.stringify(clients));
+      localStorage.setItem('azlon_clients_version', 'v3');
+    } catch (e) {
+      console.error('Failed to cache clients to localStorage', e);
+    }
   }, [clients]);
 
   const handleSlugPreview = (name) => {

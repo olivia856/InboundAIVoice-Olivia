@@ -522,22 +522,28 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
 
   useEffect(() => {
     // FORCE reset to 'light' for this final calibration session to override cached dark settings
-    if (theme === 'light') {
-      document.documentElement.classList.remove('dark');
-      localStorage.setItem('theme', 'light');
-    } else {
-      document.documentElement.classList.add('dark');
-      localStorage.setItem('theme', 'dark');
-    }
+    try {
+      if (theme === 'light') {
+        document.documentElement.classList.remove('dark');
+        localStorage.setItem('theme', 'light');
+      } else {
+        document.documentElement.classList.add('dark');
+        localStorage.setItem('theme', 'dark');
+      }
+    } catch (e) { console.error('LocalStorage quota exceeded', e); }
   }, [theme]);
 
-  // MOUNT RESET: Ensure we start clean in Light Mode
+  // MOUNT RESET: Ensure we start clean in Light Mode, and clean up bloated storage
   useEffect(() => {
-    const saved = localStorage.getItem('theme');
-    if (!saved) {
-      setTheme('light');
-      document.documentElement.classList.remove('dark');
-    }
+    try {
+      localStorage.removeItem('azlon_clients');
+      localStorage.removeItem('voice_saas_user');
+      const saved = localStorage.getItem('theme');
+      if (!saved) {
+        setTheme('light');
+        document.documentElement.classList.remove('dark');
+      }
+    } catch (e) { console.error('LocalStorage error', e); }
   }, []);
 
   const [agentToggleModal, setAgentToggleModal] = useState(null); // { action: 'pause'|'enable' }
