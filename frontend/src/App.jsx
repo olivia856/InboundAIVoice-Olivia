@@ -2693,7 +2693,7 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                   res = await fetch(`${API_BASE}/api/appointments/manual`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'x-client-id': clientId },
-                    body: JSON.stringify({ start_time, name: e.target.apptname?.value || calendarModal.prefill?.name, phone: e.target.apptphone?.value || calendarModal.prefill?.phone, client_id: clientId })
+                    body: JSON.stringify({ start_time, name: e.target.apptname?.value || calendarModal.prefill?.name, phone: e.target.apptphone?.value || calendarModal.prefill?.phone, email: e.target.apptemail?.value || calendarModal.prefill?.email, client_id: clientId })
                   });
                 }
                 if(!res.ok) { const err = await res.json(); throw new Error(err.error || 'Failed'); }
@@ -2726,6 +2726,10 @@ function ClientDashboard({ user, onLogout, onBackToAdmin, onAgentToggle }) {
                <div>
                   <label className="block text-[10px] font-bold text-muted-foreground uppercase mb-1">Phone Number</label>
                   <input name="apptphone" required={!calendarModal.prefill} placeholder="+1234567890" defaultValue={calendarModal.prefill?.phone || ''} disabled={calendarModal.mode === 'reschedule'} className="w-full bg-background border border-border rounded-lg p-3 text-sm outline-none focus:border-primary transition-colors disabled:opacity-50 cursor-not-allowed font-mono" />
+               </div>
+               <div>
+                  <label className="block text-[10px] font-bold text-muted-foreground uppercase mb-1">Email Address</label>
+                  <input name="apptemail" type="email" required={!calendarModal.prefill} placeholder="client@example.com" defaultValue={calendarModal.prefill?.email || ''} disabled={calendarModal.mode === 'reschedule'} className="w-full bg-background border border-border rounded-lg p-3 text-sm outline-none focus:border-primary transition-colors disabled:opacity-50 cursor-not-allowed" />
                </div>
                <button type="submit" className="w-full bg-primary text-white font-bold py-3 rounded-lg shadow-lg shadow-primary/20 hover:bg-primary/90 mt-4 transition-all">
                   {calendarModal.mode === 'reschedule' ? 'Save New Time' : calendarModal.mode === 'followup' ? 'Confirm Follow-Up' : 'Record Booking Internally'}

@@ -2446,6 +2446,9 @@ app.post('/api/tools/book/:client_id?', async (req, res) => {
         if (!phone || phone.trim() === '' || phone.toLowerCase().includes('unknown')) {
             return res.json({ result: "I still need the caller's phone number to complete the booking. Could you please collect it?" });
         }
+        if (!email || email.trim() === '' || email.toLowerCase().includes('unknown')) {
+            return res.json({ result: "I still need the caller's email address to complete the booking. Could you please collect it?" });
+        }
 
         // --- DATA INTEGRITY FIX: Force IST and check conflicts with 'Self-Recognition' ---
         const istStartTime = forceIST(start_time);
@@ -2831,8 +2834,8 @@ app.delete('/api/crm/lead/:id', async (req, res) => {
 // --- DASHBOARD APPOINTMENT MANAGEMENT ---
 app.post('/api/appointments/manual', async (req, res) => {
     try {
-        const { name, phone, start_time, client_id } = req.body;
-        const { data } = await supabase.from('appointments').insert([{ name, phone, start_time, client_id, status: 'confirmed' }]).select();
+        const { name, phone, email, start_time, client_id } = req.body;
+        const { data } = await supabase.from('appointments').insert([{ name, phone, email, start_time, client_id, status: 'confirmed', source: 'manual' }]).select();
         res.json({ success: true, appointment: data[0] });
     } catch(err) { res.status(500).json({ error: "Failed to book." }); }
 });
